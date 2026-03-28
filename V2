@@ -1989,25 +1989,38 @@ Vesper.SaveManager = (function()
     function SM:SetLibrary(lib) self._library = lib end  -- compat shim
 
     -- Build a config table from current Options
-    function SM:_Collect()
-        local data = {}
-        for key, elem in pairs(Vesper.Options) do
-            if not self._ignored[key] then
-                local val = elem:GetState and elem:GetState() or elem.Value
-                local t   = type(val)
-                if t == "boolean" or t == "number" or t == "string" then
-                    data[key] = val
-                elseif t == "table" then          -- multi-dropdown
-                    data[key] = val
-                elseif typeof(val) == "Color3" then
-                    data[key] = SerColor(val)
-                elseif typeof(val) == "EnumItem" then
-                    data[key] = val.Name
-                end
+function SM:_Collect()
+    local data = {}
+
+    for key, elem in pairs(Vesper.Options) do
+        if not (self._ignored and self._ignored[key]) then
+            
+            local val
+            if elem.GetState then
+                local success, result = pcall(function()
+                    return elem:GetState()
+                end)
+                val = success and result or elem.Value
+            else
+                val = elem.Value
+            end
+
+            local t = typeof(val)
+
+            if t == "boolean" or t == "number" or t == "string" then
+                data[key] = val
+            elseif t == "table" then
+                data[key] = val
+            elseif t == "Color3" then
+                data[key] = SerColor(val)
+            elseif t == "EnumItem" then
+                data[key] = val.Name
             end
         end
-        return data
     end
+
+    return data
+end
 
     -- Apply a config table back to Options
     function SM:_Apply(data)
@@ -2205,3 +2218,156 @@ end)()
 -- ════════════════════════════════════════════════════════════════
 return Vesper
 -- ════════════════════════════════════════════════════════════════
+
+--[[
+╔══════════════════════════════════════════════════════════════════╗
+║                    FULL USAGE EXAMPLE                           ║
+╚══════════════════════════════════════════════════════════════════╝
+
+local Vesper = loadstring(game:HttpGet("YOUR_RAW_URL"))()
+local SaveManager = Vesper.SaveManager
+
+-- Optional: change theme  (Dark / Midnight / Ember)
+-- Vesper:SetTheme("Midnight")
+
+local Window = Vesper:CreateWindow({
+    Title       = 'Vesper Hub <font color="rgb(139,92,246)">v3</font>',
+    Subtitle    = "by you",
+    MinimizeKey = Enum.KeyCode.RightControl,
+    Tag         = "Premium Build",
+})
+
+local Tabs = {
+    Main     = Window:AddTab({ Title = "Main",     Icon = "lucide-home"     }),
+    Combat   = Window:AddTab({ Title = "Combat",   Icon = "lucide-swords"   }),
+    Settings = Window:AddTab({ Title = "Settings", Icon = "lucide-settings" }),
+}
+
+-- ── Main tab ───────────────────────────────────────────────────
+local General = Tabs.Main:CreateSection({ Title = "General", Icon = "lucide-zap" })
+
+General:CreateParagraph({
+    Title   = "Welcome",
+    Content = "This is Vesper v3.\nEnjoy the professional UI experience.",
+})
+
+local SpeedToggle = General:CreateToggle("SpeedHack", {
+    Title       = "Speed Hack",
+    Description = "Enables boosted walk speed",
+    Default     = false,
+    Callback    = function(state)
+        -- your code
+    end,
+})
+
+SpeedToggle:OnChanged(function(state)
+    print("Speed hack is now:", state)
+end)
+
+-- Toggle from code:
+-- SpeedToggle:SetValue(true)
+-- SpeedToggle:GetState()  → bool
+
+local SpeedSlider = General:CreateSlider("SpeedValue", {
+    Title       = "Walk Speed",
+    Description = "How fast the player moves",
+    Default     = 16,
+    Min         = 16,
+    Max         = 500,
+    Rounding    = 0,
+    Suffix      = " sp",
+    Callback    = function(value)
+        -- game.Players.LocalPlayer.Character.Humanoid.WalkSpeed = value
+    end,
+})
+
+SpeedSlider:OnChanged(function(value)
+    print("Speed:", value)
+end)
+
+General:CreateButton({
+    Title       = "Reset Speed",
+    Description = "Returns walk speed to default",
+    Callback    = function()
+        SpeedSlider:SetValue(16)
+    end,
+})
+
+-- ── Combat tab ─────────────────────────────────────────────────
+local EventSec = Tabs.Combat:CreateSection({ Title = "Events" })
+
+local EventDrop = EventSec:CreateDropdown("TargetEvent", {
+    Title   = "Target Event",
+    Values  = {"Scylla", "Kraken", "Megalodon", "Leviathan"},
+    Multi   = false,
+    Default = "Scylla",
+    Callback = function(v) print("Target:", v) end,
+})
+
+EventDrop:OnChanged(function(v) print("Changed to:", v) end)
+EventDrop:SetValue("Kraken")
+
+local BuffDrop = EventSec:CreateDropdown("ActiveBuffs", {
+    Title       = "Active Buffs",
+    Description = "You can select multiple",
+    Values      = {"Haste", "Luck", "Strength", "Fortune"},
+    Multi       = true,
+    Default     = {"Haste"},
+    Callback    = function(t) print(table.concat(t,", ")) end,
+})
+
+-- ── Settings tab ───────────────────────────────────────────────
+local UISec = Tabs.Settings:CreateSection({ Title = "Interface", Icon = "lucide-palette" })
+
+local Picker = UISec:CreateColorPicker("AccentColor", {
+    Title    = "Accent Color",
+    Default  = Color3.fromRGB(139, 92, 246),
+    Callback = function(c) print("Color:", c) end,
+})
+
+Picker:OnChanged(function()
+    print("New color:", Picker.Value)
+end)
+
+UISec:CreateColorPicker("AccentWithAlpha", {
+    Title        = "Color + Transparency",
+    Description  = "Supports alpha channel",
+    Default      = Color3.fromRGB(139, 92, 246),
+    Transparency = 0,
+    Callback     = function(c, t) print("Color:", c, "Trans:", t) end,
+})
+
+local HotKey = UISec:CreateKeybind("UIHotkey", {
+    Title    = "Toggle UI",
+    Mode     = "Toggle",
+    Default  = "RightControl",
+    Callback = function(state) print("UI toggle state:", state) end,
+    ChangedCallback = function(newKey) print("Rebound to:", newKey) end,
+})
+HotKey:OnClick(function() print("Hotkey clicked!") end)
+
+UISec:CreateTextBox("WebhookURL", {
+    Title       = "Discord Webhook",
+    Description = "Sends alerts to your server",
+    Placeholder = "https://discord.com/api/webhooks/...",
+    Finished    = true,
+    Callback    = function(v) print("Webhook set:", v) end,
+})
+
+-- ── SaveManager ────────────────────────────────────────────────
+SaveManager:SetFolder("VesperHub/MyGame")
+SaveManager:SetIgnoreIndexes({ "_cfgName", "_cfgDrop" })
+SaveManager:BuildConfigSection(Tabs.Settings)
+
+Window:SelectTab(1)
+
+Vesper:Notify({
+    Title   = "Vesper Loaded",
+    Content = "Script injected successfully.",
+    Type    = "success",
+    Duration = 6,
+})
+
+-- Load autoload config last
+SaveManager:LoadAutoloadConfig()
+]]
