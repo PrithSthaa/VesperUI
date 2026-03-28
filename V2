@@ -98,6 +98,10 @@ pcall(function()
         "https://raw.githubusercontent.com/dawid-scripts/Fluent/master/src/Icons.lua"
     ))().assets
 end)
+if not Icons or not next(Icons) then
+    Icons = {}
+    setmetatable(Icons, {__index = function() return "rbxassetid://0" end})
+end
 local function Icon(name) return Icons[name] or Icons["lucide-box"] or "" end
 
 -- ────────────────────────────────────────────────────────────────
@@ -443,6 +447,7 @@ function Vesper:CreateWindow(cfg)
             Ico.Size     = UDim2.new(0,20,0,20)
             Ico.Image    = Icon(tabIcon)
             Ico.ImageColor3 = T.Muted
+            Ico.ZIndex = Btn.ZIndex + 1
         end
 
         local Lbl = Instance.new("TextLabel", Btn)
@@ -455,6 +460,7 @@ function Vesper:CreateWindow(cfg)
         Lbl.TextSize   = 13
         Lbl.TextXAlignment = Enum.TextXAlignment.Left
         Lbl.TextTruncate   = Enum.TextTruncate.AtEnd
+        Lbl.ZIndex = Btn.ZIndex + 1
 
         local Sub = Instance.new("TextLabel", Btn)
         Sub.BackgroundTransparency = 1
@@ -466,6 +472,7 @@ function Vesper:CreateWindow(cfg)
         Sub.TextSize   = 10
         Sub.TextXAlignment = Enum.TextXAlignment.Left
         Sub.TextTruncate   = Enum.TextTruncate.AtEnd
+        Sub.ZIndex = Btn.ZIndex + 1 
 
         -- Scroll canvas update
         TabListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
