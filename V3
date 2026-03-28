@@ -1155,11 +1155,11 @@ function Vesper:CreateWindow(cfg)
                 local Panel = Instance.new("Frame", wrap)
                 Panel.BackgroundColor3 = T.Surface
                 Panel.BorderSizePixel  = 0
-                Panel.Position = UDim2.new(0,0,1,4)
-                Panel.Size     = UDim2.new(1,0,0,0)
+                Panel.Position = UDim2.new(0,0,0,0)
+                Panel.Size     = UDim2.new(0,0,0,0)
                 Panel.ClipsDescendants = true
                 Panel.Visible  = false
-                Panel.ZIndex   = 20
+                Panel.ZIndex   = 100
                 AddCorner(Panel, 6)
                 AddStroke(Panel, T.Border, 1)
 
@@ -1264,13 +1264,18 @@ function Vesper:CreateWindow(cfg)
                 TopBtn.MouseButton1Click:Connect(function()
                     isOpen = not isOpen
                     if isOpen then
+                        -- Compute absolute position from wrap on screen
+                        local abs = wrap.AbsolutePosition
+                        local sz  = wrap.AbsoluteSize
+                        Panel.Position = UDim2.new(0, abs.X, 0, abs.Y + sz.Y + 4)
+                        Panel.Size     = UDim2.new(0, sz.X, 0, 0)
+
                         SearchBox.Text = ""; Panel.Visible = true; BuildList("")
                         local ph = math.min(#items, MAX_VIS) * 28 + 40
-                        Panel.Size = UDim2.new(1,0,0,0)
-                        TweenPlay(Panel, {Size=UDim2.new(1,0,0,ph)}, 0.22, Enum.EasingStyle.Back)
+                        TweenPlay(Panel, {Size=UDim2.new(0,sz.X,0,ph)}, 0.22, Enum.EasingStyle.Back)
                         TweenPlay(Chev, {Rotation=180}, 0.2)
                     else
-                        TweenPlay(Panel, {Size=UDim2.new(1,0,0,0)}, 0.18, Enum.EasingStyle.Quint)
+                        TweenPlay(Panel, {Size=UDim2.new(0, wrap.AbsoluteSize.X, 0, 0)}, 0.18, Enum.EasingStyle.Quint)
                         TweenPlay(Chev, {Rotation=0}, 0.18)
                         task.delay(0.18, function() Panel.Visible = false end)
                     end
