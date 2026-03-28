@@ -621,7 +621,7 @@ function Vesper:CreateWindow(cfg)
 
             local function MakeTitle(parent, title, desc, xOff4)
                 xOff4 = xOff4 or 10
-                local yTitle = desc and 7 or 0
+                local yTitle = 7
                 local tl = Instance.new("TextLabel", parent)
                 tl.BackgroundTransparency = 1
                 tl.Position = UDim2.new(0,xOff4,0,yTitle)
@@ -968,7 +968,7 @@ function Vesper:CreateWindow(cfg)
                 -- Title + val display on same top line
                 local TL = Instance.new("TextLabel", row)
                 TL.BackgroundTransparency = 1
-                TL.Position = UDim2.new(0,10,0, desc and 7 or 6)
+                TL.Position = UDim2.new(0,10,0, desc and 7 or 7)
                 TL.Size     = UDim2.new(0.6,0,0,16)
                 TL.Font     = Enum.Font.GothamBold
                 TL.Text     = title
@@ -977,7 +977,7 @@ function Vesper:CreateWindow(cfg)
 
                 local VL = Instance.new("TextLabel", row)
                 VL.BackgroundTransparency = 1
-                VL.Position = UDim2.new(0.6,0,0, desc and 7 or 6)
+                VL.Position = UDim2.new(0.6,0,0, desc and 7 or 7)
                 VL.Size     = UDim2.new(0.4,-12,0,16)
                 VL.Font     = Enum.Font.GothamBold
                 VL.Text     = tostring(val) .. suffix
@@ -1713,7 +1713,6 @@ function Vesper:CreateWindow(cfg)
     end -- AddTab
 
     -- Expose both names
-    -- REPLACE WITH:
     Window.AddTab = function(self_or_cfg, cfg)
         return AddTab(cfg or self_or_cfg)
     end
