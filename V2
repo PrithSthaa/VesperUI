@@ -398,136 +398,128 @@ function Vesper:CreateWindow(cfg)
         tab._sub.TextColor3 = T.SubText
         tab._page.Visible   = true
     end
--- ════════════════════════════════════════════════
---  WINDOW:ADDTAB  (FINAL FIXED)
--- ════════════════════════════════════════════════
-local function AddTab(tabCfg)
-    -- 🛡️ HARDEN INPUT
-    if type(tabCfg) ~= "table" then
-        tabCfg = { tostring(tabCfg) }
-    end
+    -- ════════════════════════════════════════════════
+    --  WINDOW:ADDTAB  (alias: CreateTab)
+    -- ════════════════════════════════════════════════
+    local function AddTab(tabCfg)
+        local tabName  = tabCfg.Title or tabCfg[1] or "Tab"
+        local tabSub   = tabCfg.Subtitle or tabCfg[2] or ""
+        local tabIcon  = tabCfg.Icon or tabCfg[3]
 
-    local tabName = "Tab"
-    local tabSub  = ""
-    local tabIcon = nil
+        -- Sidebar button
+        local Btn = Instance.new("TextButton", TabList)
+        Btn.BackgroundColor3 = T.Sidebar
+        Btn.BorderSizePixel  = 0
+        Btn.Size             = UDim2.new(1,-16,0,48)
+        Btn.Text             = ""; Btn.AutoButtonColor = false
+        Btn.ClipsDescendants = true
+        AddCorner(Btn, 7)
 
-    if tabCfg.Title ~= nil then
-        tabName = tostring(tabCfg.Title)
-    elseif tabCfg[1] ~= nil then
-        tabName = tostring(tabCfg[1])
-    end
+        Btn.MouseEnter:Connect(function()
+            if Window._active and Window._active._btn == Btn then return end
+            TweenPlay(Btn, {BackgroundColor3=Color3.fromRGB(22,22,28)}, 0.12)
+        end)
+        Btn.MouseLeave:Connect(function()
+            if Window._active and Window._active._btn == Btn then return end
+            TweenPlay(Btn, {BackgroundColor3=T.Sidebar}, 0.12)
+        end)
 
-    if tabCfg.Subtitle ~= nil then
-        tabSub = tostring(tabCfg.Subtitle)
-    elseif tabCfg[2] ~= nil then
-        tabSub = tostring(tabCfg[2])
-    end
+        -- Active indicator
+        local Bar = Instance.new("Frame", Btn)
+        Bar.BackgroundColor3 = T.Accent
+        Bar.BackgroundTransparency = 1
+        Bar.AnchorPoint = Vector2.new(0,0.5)
+        Bar.Position    = UDim2.new(0,-2,0.5,0)
+        Bar.Size        = UDim2.new(0,2,0.5,0)
+        AddCorner(Bar, 4)
 
-    if tabCfg.Icon ~= nil then
-        tabIcon = tabCfg.Icon
-    elseif tabCfg[3] ~= nil then
-        tabIcon = tabCfg[3]
-    end
-
-    -- Sidebar button
-    local Btn = Instance.new("TextButton", TabList)
-    Btn.BackgroundColor3 = T.Sidebar
-    Btn.BorderSizePixel  = 0
-    Btn.Size             = UDim2.new(1,-16,0,48)
-    Btn.Text             = ""
-    Btn.AutoButtonColor  = false
-    Btn.ClipsDescendants = true
-    AddCorner(Btn, 7)
-
-    Btn.MouseEnter:Connect(function()
-        if Window._active and Window._active._btn == Btn then return end
-        TweenPlay(Btn, {BackgroundColor3 = Color3.fromRGB(22,22,28)}, 0.12)
-    end)
-
-    Btn.MouseLeave:Connect(function()
-        if Window._active and Window._active._btn == Btn then return end
-        TweenPlay(Btn, {BackgroundColor3 = T.Sidebar}, 0.12)
-    end)
-
-    -- Active bar
-    local Bar = Instance.new("Frame", Btn)
-    Bar.BackgroundColor3 = T.Accent
-    Bar.BackgroundTransparency = 1
-    Bar.AnchorPoint = Vector2.new(0,0.5)
-    Bar.Position    = UDim2.new(0,-2,0.5,0)
-    Bar.Size        = UDim2.new(0,2,0.5,0)
-    AddCorner(Bar, 4)
-
-    local xOff = tabIcon and 34 or 10
-
-    if tabIcon then
-        local Ico = Instance.new("ImageLabel", Btn)
-        Ico.BackgroundTransparency = 1
-        Ico.Position = UDim2.new(0,10,0.5,-10)
-        Ico.Size     = UDim2.new(0,20,0,20)
-        Ico.Image    = Icon(tabIcon)
-        Ico.ImageColor3 = T.Muted
-    end
-
-    -- 🧠 LABEL (FIXED)
-    local Lbl = Instance.new("TextLabel", Btn)
-    Lbl.BackgroundTransparency = 1
-    Lbl.Position = UDim2.new(0,xOff,0,8)
-    Lbl.Size     = UDim2.new(1,-xOff-4,0,18)
-    Lbl.Font     = Enum.Font.GothamBold
-    Lbl.Text     = ""
-    Lbl.TextColor3 = T.SubText
-    Lbl.TextSize   = 13
-    Lbl.TextXAlignment = Enum.TextXAlignment.Left
-    Lbl.TextTruncate   = Enum.TextTruncate.AtEnd
-
-    -- 🔥 FORCE TEXT AFTER RENDER
-    task.defer(function()
-        if Lbl then
-            Lbl.Text = tabName
+        local xOff = tabIcon and 34 or 10
+        if tabIcon then
+            local Ico = Instance.new("ImageLabel", Btn)
+            Ico.BackgroundTransparency = 1
+            Ico.Position = UDim2.new(0,10,0.5,-10)
+            Ico.Size     = UDim2.new(0,20,0,20)
+            Ico.Image    = Icon(tabIcon)
+            Ico.ImageColor3 = T.Muted
         end
-    end)
 
-    local Sub = Instance.new("TextLabel", Btn)
-    Sub.BackgroundTransparency = 1
-    Sub.Position = UDim2.new(0,xOff,0,27)
-    Sub.Size     = UDim2.new(1,-xOff-4,0,13)
-    Sub.Font     = Enum.Font.Gotham
-    Sub.Text     = tabSub
-    Sub.TextColor3 = T.Muted
-    Sub.TextSize   = 10
-    Sub.TextXAlignment = Enum.TextXAlignment.Left
-    Sub.TextTruncate   = Enum.TextTruncate.AtEnd
+        local Lbl = Instance.new("TextLabel", Btn)
+        Lbl.BackgroundTransparency = 1
+        Lbl.Position = UDim2.new(0,xOff,0,8)
+        Lbl.Size     = UDim2.new(1,-xOff-4,0,18)
+        Lbl.Font     = Enum.Font.GothamBold
+        Lbl.Text     = tabName
+        Lbl.TextColor3 = T.SubText
+        Lbl.TextSize   = 13
+        Lbl.TextXAlignment = Enum.TextXAlignment.Left
+        Lbl.TextTruncate   = Enum.TextTruncate.AtEnd
 
-    -- Page
-    local Page = Instance.new("ScrollingFrame", ContentArea)
-    Page.BackgroundTransparency = 1
-    Page.Size  = UDim2.new(1,0,1,0)
-    Page.ScrollBarThickness  = 3
-    Page.ScrollBarImageColor3 = T.Accent
-    Page.CanvasSize = UDim2.new(0,0,0,0)
-    Page.Visible    = false
-    AddPad(Page, 12,12,12,12)
+        local Sub = Instance.new("TextLabel", Btn)
+        Sub.BackgroundTransparency = 1
+        Sub.Position = UDim2.new(0,xOff,0,27)
+        Sub.Size     = UDim2.new(1,-xOff-4,0,13)
+        Sub.Font     = Enum.Font.Gotham
+        Sub.Text     = tabSub
+        Sub.TextColor3 = T.Muted
+        Sub.TextSize   = 10
+        Sub.TextXAlignment = Enum.TextXAlignment.Left
+        Sub.TextTruncate   = Enum.TextTruncate.AtEnd
 
-    local tabObj = {
-        _name  = tabName, -- 🔥 store real name (important)
-        _btn   = Btn,
-        _bar   = Bar,
-        _lbl   = Lbl,
-        _sub   = Sub,
-        _page  = Page,
-    }
+        -- Scroll canvas update
+        TabListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+            TabList.CanvasSize = UDim2.new(0,0,0, TabListLayout.AbsoluteContentSize.Y + 12)
+        end)
 
-    Btn.MouseButton1Click:Connect(function()
-        SwitchTab(tabObj)
-    end)
+        -- Content page
+        local Page = Instance.new("ScrollingFrame", ContentArea)
+        Page.BackgroundTransparency = 1
+        Page.Size  = UDim2.new(1,0,1,0)
+        Page.ScrollBarThickness  = 3
+        Page.ScrollBarImageColor3 = T.Accent
+        Page.CanvasSize = UDim2.new(0,0,0,0)
+        Page.Visible    = false
+        AddPad(Page, 12,12,12,12)
 
-    if not Window._active then
-        SwitchTab(tabObj)
-    end
+        -- Two-column holder
+        local ColHolder = Instance.new("Frame", Page)
+        ColHolder.BackgroundTransparency = 1
+        ColHolder.Size = UDim2.new(1,0,0,0)
+        ColHolder.AutomaticSize = Enum.AutomaticSize.Y
+        local ColList = Instance.new("UIListLayout", ColHolder)
+        ColList.FillDirection  = Enum.FillDirection.Horizontal
+        ColList.Padding        = UDim.new(0,8)
+        ColList.VerticalAlignment = Enum.VerticalAlignment.Top
+        ColList.SortOrder      = Enum.SortOrder.LayoutOrder
 
-    table.insert(Window._tabs, tabObj)
+        local LeftCol  = Instance.new("Frame", ColHolder)
+        LeftCol.BackgroundTransparency = 1
+        LeftCol.Size = UDim2.new(0.5,-4,0,0)
+        LeftCol.AutomaticSize = Enum.AutomaticSize.Y
+        AddList(LeftCol, 8)
 
+        local RightCol = Instance.new("Frame", ColHolder)
+        RightCol.BackgroundTransparency = 1
+        RightCol.Size = UDim2.new(0.5,-4,0,0)
+        RightCol.AutomaticSize = Enum.AutomaticSize.Y
+        AddList(RightCol, 8)
+
+        ColHolder:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+            Page.CanvasSize = UDim2.new(0,0,0, ColHolder.AbsoluteSize.Y + 24)
+        end)
+
+        local tabObj = {
+            _btn    = Btn,
+            _bar    = Bar,
+            _lbl    = Lbl,
+            _sub    = Sub,
+            _page   = Page,
+            _left   = LeftCol,
+            _right  = RightCol,
+            _col    = true,  -- alternates columns
+        }
+        Btn.MouseButton1Click:Connect(function() SwitchTab(tabObj) end)
+        if not Window._active then SwitchTab(tabObj) end
+        table.insert(Window._tabs, tabObj)
     -- ─────────────────────────────────────────────
     -- FINAL SAFETY (ANTI-OVERRIDE)
     -- ─────────────────────────────────────────────
