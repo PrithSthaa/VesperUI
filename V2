@@ -1715,11 +1715,7 @@ function Vesper:CreateWindow(cfg)
     -- Expose both names
     -- REPLACE WITH:
     Window.AddTab = function(self_or_cfg, cfg)
-        if cfg then
-            return AddTab(cfg)   -- called with colon: Window:AddTab({...})
-        else
-            return AddTab(self_or_cfg)  -- called with dot: Window.AddTab({...})
-        end
+        return AddTab(cfg or self_or_cfg)
     end
     Window.CreateTab = Window.AddTab
 
