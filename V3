@@ -1152,7 +1152,7 @@ function Vesper:CreateWindow(cfg)
                 Chev.ImageColor3 = T.Muted; Chev.ZIndex = 6
 
                 -- Panel (overlays content)
-                local Panel = Instance.new("Frame", wrap)
+                local Panel = Instance.new("Frame", Screen)
                 Panel.BackgroundColor3 = T.Surface
                 Panel.BorderSizePixel  = 0
                 Panel.Position = UDim2.new(0,0,0,0)
@@ -1162,6 +1162,15 @@ function Vesper:CreateWindow(cfg)
                 Panel.ZIndex   = 100
                 AddCorner(Panel, 6)
                 AddStroke(Panel, T.Border, 1)
+
+                Main:GetPropertyChangedSignal("Visible"):Connect(function()
+                if not Main.Visible then
+                Panel.Visible = false
+                isOpen = false
+                TweenPlay(Chev, {Rotation=0}, 0)
+                    end
+                end)
+
 
                 local SearchBox = Instance.new("TextBox", Panel)
                 SearchBox.BackgroundColor3 = T.InputBg
@@ -1243,7 +1252,7 @@ function Vesper:CreateWindow(cfg)
                                     task.spawn(cb, item)
                                     if _onChanged then task.spawn(_onChanged, item) end
                                     isOpen = false
-                                    TweenPlay(Panel, {Size=UDim2.new(1,0,0,0)}, 0.18, Enum.EasingStyle.Quint)
+                                    TweenPlay(Panel, {Size=UDim2.new(0, wrap.AbsoluteSize.X, 0, 0)}, 0.18, Enum.EasingStyle.Quint)
                                     TweenPlay(Chev,  {Rotation=0}, 0.18)
                                     task.delay(0.18, function() Panel.Visible = false end)
                                 end
