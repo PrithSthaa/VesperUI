@@ -414,7 +414,7 @@ function Vesper:CreateWindow(cfg)
         Btn.BorderSizePixel  = 0
         Btn.Size             = UDim2.new(1,0,0,48)
         Btn.Text             = ""; Btn.AutoButtonColor = false
-        Btn.ClipsDescendants = true
+        Btn.ClipsDescendants = false
         AddCorner(Btn, 7)
 
         Btn.MouseEnter:Connect(function()
