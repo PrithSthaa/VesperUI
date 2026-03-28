@@ -253,6 +253,7 @@ function Vesper:CreateWindow(cfg)
     SideFlat.Position = UDim2.new(1,-10,0,0)
     SideFlat.Size     = UDim2.new(0,10,1,0)
     SideFlat.BorderSizePixel = 0
+    SideFlat.ZIndex = 0
 
     local SideLine = Instance.new("Frame", Sidebar)
     SideLine.BackgroundColor3 = T.Border
