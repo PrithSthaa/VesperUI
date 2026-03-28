@@ -303,6 +303,7 @@ function Vesper:CreateWindow(cfg)
     TabList.CanvasSize = UDim2.new(0,0,0,0)
     AddPad(TabList, 6,6,8,8)
     local TabListLayout = AddList(TabList, 2)
+    TabListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 
     -- ── Header (title bar, right side) ───────────────
     local Header = Instance.new("Frame", Main)
