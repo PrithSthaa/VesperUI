@@ -381,42 +381,23 @@ function Vesper:CreateWindow(cfg)
     Vesper._window  = Window
 
     -- ── Internal: switch active tab ──────────────────
-    local function SwitchTab(tab)
+        local function SwitchTab(tab)
         if Window._active == tab then return end
-
-        -- Reset old tab
         if Window._active then
             local old = Window._active
-
-            TweenPlay(old._btn, {BackgroundColor3 = T.Sidebar}, 0.18)
-            TweenPlay(old._bar, {BackgroundTransparency = 1, Size = UDim2.new(0,2,0.5,0)}, 0.18)
-
+            TweenPlay(old._btn,  {BackgroundColor3 = T.Sidebar}, 0.18)
+            TweenPlay(old._bar,  {BackgroundTransparency = 1, Size = UDim2.new(0,2,0.5,0)}, 0.18)
             old._lbl.TextColor3 = T.SubText
             old._sub.TextColor3 = T.Muted
             old._page.Visible   = false
-
-            -- 🔒 ensure text is never lost
-            if old._name then
-                old._lbl.Text = old._name
-            end
         end
-
-        -- Set new active tab
         Window._active = tab
-
         TweenPlay(tab._btn, {BackgroundColor3 = T.SidebarHover}, 0.18)
         TweenPlay(tab._bar, {BackgroundTransparency = 0, Size = UDim2.new(0,3,0.65,0)}, 0.22, Enum.EasingStyle.Back)
-
         tab._lbl.TextColor3 = T.Text
         tab._sub.TextColor3 = T.SubText
         tab._page.Visible   = true
-
-        -- 🔥 FORCE correct name again (anti-bug)
-        if tab._name then
-            tab._lbl.Text = tab._name
-        end
     end
-
 -- ════════════════════════════════════════════════
 --  WINDOW:ADDTAB  (FINAL FIXED)
 -- ════════════════════════════════════════════════
