@@ -301,7 +301,7 @@ function Vesper:CreateWindow(cfg)
     TabList.Size      = UDim2.new(1,0,1,-80)
     TabList.ScrollBarThickness = 0
     TabList.CanvasSize = UDim2.new(0,0,0,0)
-    AddPad(TabList, 6,6,0,0)
+    AddPad(TabList, 6,6,8,8)
     local TabListLayout = AddList(TabList, 2)
 
     -- ── Header (title bar, right side) ───────────────
@@ -411,7 +411,7 @@ function Vesper:CreateWindow(cfg)
         local Btn = Instance.new("TextButton", TabList)
         Btn.BackgroundColor3 = T.Sidebar
         Btn.BorderSizePixel  = 0
-        Btn.Size             = UDim2.new(1,-16,0,48)
+        Btn.Size             = UDim2.new(1,0,0,48)
         Btn.Text             = ""; Btn.AutoButtonColor = false
         Btn.ClipsDescendants = true
         AddCorner(Btn, 7)
