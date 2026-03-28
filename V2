@@ -381,7 +381,7 @@ function Vesper:CreateWindow(cfg)
     Vesper._window  = Window
 
     -- ── Internal: switch active tab ──────────────────
-        local function SwitchTab(tab)
+    local function SwitchTab(tab)
         if Window._active == tab then return end
         if Window._active then
             local old = Window._active
@@ -398,6 +398,7 @@ function Vesper:CreateWindow(cfg)
         tab._sub.TextColor3 = T.SubText
         tab._page.Visible   = true
     end
+
     -- ════════════════════════════════════════════════
     --  WINDOW:ADDTAB  (alias: CreateTab)
     -- ════════════════════════════════════════════════
@@ -520,17 +521,6 @@ function Vesper:CreateWindow(cfg)
         Btn.MouseButton1Click:Connect(function() SwitchTab(tabObj) end)
         if not Window._active then SwitchTab(tabObj) end
         table.insert(Window._tabs, tabObj)
-    -- ─────────────────────────────────────────────
-    -- FINAL SAFETY (ANTI-OVERRIDE)
-    -- ─────────────────────────────────────────────
-    task.spawn(function()
-        while tabObj and tabObj._lbl do
-            if tabObj._lbl.Text ~= tabObj._name then
-                tabObj._lbl.Text = tabObj._name
-            end
-            task.wait(0.5)
-        end
-    end)
 
         -- ════════════════════════════════════════════
         --  TAB API
@@ -1999,38 +1989,38 @@ Vesper.SaveManager = (function()
     function SM:SetLibrary(lib) self._library = lib end  -- compat shim
 
     -- Build a config table from current Options
-function SM:_Collect()
-    local data = {}
+        function SM:_Collect()
+            local data = {}
 
-    for key, elem in pairs(Vesper.Options) do
-        if not (self._ignored and self._ignored[key]) then
-            
-            local val
-            if elem.GetState then
-                local success, result = pcall(function()
-                    return elem:GetState()
-                end)
-                val = success and result or elem.Value
-            else
-                val = elem.Value
+            for key, elem in pairs(Vesper.Options) do
+                if not (self._ignored and self._ignored[key]) then
+                    
+                    local val
+                    if elem.GetState then
+                        local success, result = pcall(function()
+                            return elem:GetState()
+                        end)
+                        val = success and result or elem.Value
+                    else
+                        val = elem.Value
+                    end
+
+                    local t = typeof(val)
+
+                    if t == "boolean" or t == "number" or t == "string" then
+                        data[key] = val
+                    elseif t == "table" then
+                        data[key] = val
+                    elseif t == "Color3" then
+                        data[key] = SerColor(val)
+                    elseif t == "EnumItem" then
+                        data[key] = val.Name
+                    end
+                end
             end
 
-            local t = typeof(val)
-
-            if t == "boolean" or t == "number" or t == "string" then
-                data[key] = val
-            elseif t == "table" then
-                data[key] = val
-            elseif t == "Color3" then
-                data[key] = SerColor(val)
-            elseif t == "EnumItem" then
-                data[key] = val.Name
-            end
+            return data
         end
-    end
-
-    return data
-end
 
     -- Apply a config table back to Options
     function SM:_Apply(data)
