@@ -1,37 +1,23 @@
 -- ================================================================
---  Vesper UI Library  —  v3.0 (Fixed)
---  Custom logo via ImageLabel · Toggle bug fixed · Rebindable hotkey
+-- Vesper UI Library — v3.0 (Fixed + Glass + Theme + Reset)
+-- Custom logo via ImageLabel · Toggle bug fixed · Rebindable hotkey
+-- Logo sizing fixed · Theme dropdown · Glass background · Reset UI
 -- ================================================================
---  CHANGE LOG (v3.0 Fixed):
---  [FIX] Bubble toggle now sets Bubble.Visible = val so ALL children
---        (logo, glow, click button) show/hide together correctly.
---  [NEW] Replace frame-based MakeLogo() with ImageLabel logo.
---        Set YOUR_LOGO_ASSET_ID to your uploaded Roblox asset ID.
--- ================================================================
-
--- ▼▼▼ REPLACE THIS WITH YOUR UPLOADED ROBLOX ASSET ID ▼▼▼
 local LOGO_ASSET_ID = "rbxassetid://72372201156015"
--- Upload VesperV1_transparent.png to Roblox Toolbox, then paste the ID above.
--- ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 
-local CoreGui      = game:GetService("CoreGui")
+local CoreGui = game:GetService("CoreGui")
 local TweenService = game:GetService("TweenService")
-local UIS          = game:GetService("UserInputService")
-local TextService  = game:GetService("TextService")
-local Players      = game:GetService("Players")
-local LP           = Players.LocalPlayer
+local UIS = game:GetService("UserInputService")
+local TextService = game:GetService("TextService")
+local Players = game:GetService("Players")
+local LP = Players.LocalPlayer
 
 -- ────────────────────────────────────────────────────────────────
---  INTERNAL UTILITIES
+-- INTERNAL UTILITIES
 -- ────────────────────────────────────────────────────────────────
 local function TweenPlay(obj, props, t, style, dir)
-    TweenService:Create(obj,
-        TweenInfo.new(t or 0.2,
-            style or Enum.EasingStyle.Quint,
-            dir   or Enum.EasingDirection.Out),
-        props):Play()
+    TweenService:Create(obj, TweenInfo.new(t or 0.2, style or Enum.EasingStyle.Quint, dir or Enum.EasingDirection.Out), props):Play()
 end
-
 local function AddCorner(p, r)
     local c = Instance.new("UICorner", p); c.CornerRadius = UDim.new(0, r or 6); return c
 end
@@ -42,47 +28,39 @@ local function AddStroke(p, col, thick, trans)
 end
 local function AddPad(p, top, bot, left, right)
     local u = Instance.new("UIPadding", p)
-    u.PaddingTop    = UDim.new(0, top   or 0)
-    u.PaddingBottom = UDim.new(0, bot   or 0)
-    u.PaddingLeft   = UDim.new(0, left  or 0)
-    u.PaddingRight  = UDim.new(0, right or 0)
+    u.PaddingTop = UDim.new(0, top or 0)
+    u.PaddingBottom = UDim.new(0, bot or 0)
+    u.PaddingLeft = UDim.new(0, left or 0)
+    u.PaddingRight = UDim.new(0, right or 0)
     return u
 end
 local function AddList(p, pad, dir)
     local l = Instance.new("UIListLayout", p)
-    l.Padding          = UDim.new(0, pad or 0)
-    l.FillDirection    = dir or Enum.FillDirection.Vertical
+    l.Padding = UDim.new(0, pad or 0)
+    l.FillDirection = dir or Enum.FillDirection.Vertical
     l.HorizontalAlignment = Enum.HorizontalAlignment.Left
-    l.VerticalAlignment   = Enum.VerticalAlignment.Top
-    l.SortOrder        = Enum.SortOrder.LayoutOrder
+    l.VerticalAlignment = Enum.VerticalAlignment.Top
+    l.SortOrder = Enum.SortOrder.LayoutOrder
     return l
 end
-
 local function MakeDraggable(handle, frame)
     local drag, inp, sp, sm = false, nil, nil, nil
     handle.InputBegan:Connect(function(i)
-        if i.UserInputType == Enum.UserInputType.MouseButton1
-        or i.UserInputType == Enum.UserInputType.Touch then
+        if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
             drag = true; sp = frame.Position; sm = i.Position
-            i.Changed:Connect(function()
-                if i.UserInputState == Enum.UserInputState.End then drag = false end
-            end)
+            i.Changed:Connect(function() if i.UserInputState == Enum.UserInputState.End then drag = false end end)
         end
     end)
     handle.InputChanged:Connect(function(i)
-        if i.UserInputType == Enum.UserInputType.MouseMovement
-        or i.UserInputType == Enum.UserInputType.Touch then inp = i end
+        if i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch then inp = i end
     end)
     UIS.InputChanged:Connect(function(i)
         if i == inp and drag then
             local d = i.Position - sm
-            TweenPlay(frame, {Position = UDim2.new(
-                sp.X.Scale, sp.X.Offset + d.X,
-                sp.Y.Scale, sp.Y.Offset + d.Y)}, 0.06, Enum.EasingStyle.Linear)
+            TweenPlay(frame, {Position = UDim2.new(sp.X.Scale, sp.X.Offset + d.X, sp.Y.Scale, sp.Y.Offset + d.Y)}, 0.06, Enum.EasingStyle.Linear)
         end
     end)
 end
-
 local function Ripple(btn, color)
     local r = Instance.new("Frame", btn)
     r.BackgroundColor3 = color or Color3.fromRGB(139,92,246)
@@ -99,14 +77,10 @@ local function Ripple(btn, color)
     task.delay(0.5, function() r:Destroy() end)
 end
 
--- ────────────────────────────────────────────────────────────────
---  ICONS
--- ────────────────────────────────────────────────────────────────
+-- ICONS
 local Icons = {}
 pcall(function()
-    Icons = loadstring(game:HttpGet(
-        "https://raw.githubusercontent.com/dawid-scripts/Fluent/master/src/Icons.lua"
-    ))().assets
+    Icons = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/src/Icons.lua"))().assets
 end)
 if not Icons or not next(Icons) then
     Icons = {}
@@ -114,10 +88,7 @@ if not Icons or not next(Icons) then
 end
 local function Icon(name) return Icons[name] or Icons["lucide-box"] or "" end
 
--- ────────────────────────────────────────────────────────────────
--- CUSTOM LOGO BUILDER (FIXED)
--- Now uses Fit scaling + balanced sizing for perfect visual fit
--- ────────────────────────────────────────────────────────────────
+-- CUSTOM LOGO BUILDER (FIXED - Perfect size + Fit scaling)
 function MakeLogoImage(parent, size, position, anchor, zindex)
     local ImageLabel = Instance.new("ImageLabel")
     ImageLabel.Parent = parent
@@ -125,14 +96,10 @@ function MakeLogoImage(parent, size, position, anchor, zindex)
     ImageLabel.Position = position or UDim2.new(0.5,0,0.5,0)
     ImageLabel.BackgroundTransparency = 1
     ImageLabel.Image = LOGO_ASSET_ID
-    ImageLabel.ScaleType = Enum.ScaleType.Fit          -- FIXED: was Crop
+    ImageLabel.ScaleType = Enum.ScaleType.Fit
     ImageLabel.ClipsDescendants = true
-    if anchor then
-        ImageLabel.AnchorPoint = anchor
-    end
-    if zindex then
-        ImageLabel.ZIndex = zindex
-    end
+    if anchor then ImageLabel.AnchorPoint = anchor end
+    if zindex then ImageLabel.ZIndex = zindex end
     return ImageLabel
 end
 
@@ -222,60 +189,56 @@ end
 function Vesper:CreateWindow(cfg)
     local T = self.Theme
     cfg = cfg or {}
+    local titleText = cfg.Title or "Vesper"
+    local subtitleText = cfg.Subtitle or nil
+    local hotkey = cfg.MinimizeKey or Enum.KeyCode.RightControl
+    local tag = cfg.Tag or "v" .. self.Version
 
-    local titleText    = cfg.Title      or "Vesper"
-    local subtitleText = cfg.Subtitle   or nil
-    local hotkey       = cfg.MinimizeKey or Enum.KeyCode.RightControl
-    local tag          = cfg.Tag        or "v" .. self.Version
-
-    -- ── Cleanup ──────────────────────────────────────────────────
-    local gui_parent
-    pcall(function() gui_parent = gethui and gethui() or CoreGui end)
+    -- Cleanup
+    local gui_parent = gethui and gethui() or CoreGui
     if not gui_parent then gui_parent = LP:WaitForChild("PlayerGui") end
-    for _, v in pairs(gui_parent:GetChildren()) do
-        if v.Name == "VesperUI" then v:Destroy() end
-    end
+    for _, v in pairs(gui_parent:GetChildren()) do if v.Name == "VesperUI" then v:Destroy() end end
 
     local Screen = Instance.new("ScreenGui")
-    Screen.Name          = "VesperUI"
-    Screen.Parent        = gui_parent
-    Screen.ResetOnSpawn  = false
-    Screen.DisplayOrder  = 999
+    Screen.Name = "VesperUI"
+    Screen.Parent = gui_parent
+    Screen.ResetOnSpawn = false
+    Screen.DisplayOrder = 999
     Screen.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
-    -- ── Notification holder ──────────────────────────────────────
+    -- Notification holder
     local NotifHolder = Instance.new("Frame", Screen)
     NotifHolder.BackgroundTransparency = 1
     NotifHolder.AnchorPoint = Vector2.new(1,1)
-    NotifHolder.Position    = UDim2.new(1,-16,1,-16)
-    NotifHolder.Size        = UDim2.new(0,290,1,-32)
+    NotifHolder.Position = UDim2.new(1,-16,1,-16)
+    NotifHolder.Size = UDim2.new(0,290,1,-32)
     local NLayout = AddList(NotifHolder, 8)
     NLayout.VerticalAlignment = Enum.VerticalAlignment.Bottom
 
-    -- ── Main window ──────────────────────────────────────────────
+    -- Main window
     local Main = Instance.new("Frame", Screen)
-    Main.Name             = "Main"
+    Main.Name = "Main"
     Main.BackgroundColor3 = T.Background
-    Main.AnchorPoint      = Vector2.new(0.5,0.5)
-    Main.Position         = UDim2.new(0.5,0,0.5,0)
-    Main.Size             = UDim2.new(0,730,0,520)
+    Main.AnchorPoint = Vector2.new(0.5,0.5)
+    Main.Position = UDim2.new(0.5,0,0.5,0)
+    Main.Size = UDim2.new(0,730,0,520)
     Main.ClipsDescendants = false
-    Main.Visible          = false
+    Main.Visible = false
     AddCorner(Main, 10)
     AddStroke(Main, T.Border, 1.5)
 
     local WinGlow = Instance.new("ImageLabel", Main)
     WinGlow.BackgroundTransparency = 1
     WinGlow.Position = UDim2.new(0,-40,0,-40)
-    WinGlow.Size     = UDim2.new(1,80,1,80)
-    WinGlow.Image    = "rbxassetid://4996891970"
+    WinGlow.Size = UDim2.new(1,80,1,80)
+    WinGlow.Image = "rbxassetid://4996891970"
     WinGlow.ImageColor3 = T.Accent
     WinGlow.ImageTransparency = 0.82
     WinGlow.ZIndex = 0
 
     local WinScale = Instance.new("UIScale", Main); WinScale.Scale = 0
 
-    -- ── Sidebar ──────────────────────────────────────────────────
+    -- Sidebar
     local Sidebar = Instance.new("Frame", Main)
     Sidebar.BackgroundColor3 = T.Sidebar
     Sidebar.Size = UDim2.new(0,190,1,0)
@@ -285,33 +248,33 @@ function Vesper:CreateWindow(cfg)
     local SideFlat = Instance.new("Frame", Sidebar)
     SideFlat.BackgroundColor3 = T.Sidebar
     SideFlat.Position = UDim2.new(1,-10,0,0)
-    SideFlat.Size     = UDim2.new(0,10,1,0)
+    SideFlat.Size = UDim2.new(0,10,1,0)
     SideFlat.BorderSizePixel = 0
     SideFlat.ZIndex = 0
 
     local SideLine = Instance.new("Frame", Sidebar)
     SideLine.BackgroundColor3 = T.Border
     SideLine.Position = UDim2.new(1,-1,0,0)
-    SideLine.Size     = UDim2.new(0,1,1,0)
+    SideLine.Size = UDim2.new(0,1,1,0)
     SideLine.BorderSizePixel = 0
 
-    -- ── Sidebar logo area ─────────────────────────────────────────
+    -- WINDOW OBJECT (FIXED PLACE)
+    local Window = {}
+    Window._active = nil
+    Window._tabs = {}
+    Vesper._window = Window
+    Window.Main = Main          -- ← FIXED
+    Window.Sidebar = Sidebar    -- ← FIXED
+
+    -- Sidebar logo (fixed size)
     local LogoFrame = Instance.new("Frame", Sidebar)
     LogoFrame.BackgroundTransparency = 1
     LogoFrame.Size = UDim2.new(1,0,0,72)
-
-    -- [FIXED] Logo now perfectly sized and centered
-    MakeLogoImage(
-        LogoFrame,
-        54,                                      -- balanced size
-        UDim2.new(0, 12, 0.5, 0),                -- better left padding
-        Vector2.new(0, 0.5),                      -- anchored left-center
-        2
-    )
+    MakeLogoImage(LogoFrame, 54, UDim2.new(0, 12, 0.5, 0), Vector2.new(0, 0.5), 2)
 
     local LogoName = Instance.new("TextLabel", LogoFrame)
     LogoName.BackgroundTransparency = 1
-    LogoName.Position = UDim2.new(0, 78, 0.5, -12)   -- adjusted for new logo size
+    LogoName.Position = UDim2.new(0, 78, 0.5, -12)
     LogoName.Size = UDim2.new(1,-60,0,22)
     LogoName.Font = Enum.Font.GothamBold
     LogoName.Text = "Vesper"
@@ -321,7 +284,7 @@ function Vesper:CreateWindow(cfg)
 
     local LogoTag = Instance.new("TextLabel", LogoFrame)
     LogoTag.BackgroundTransparency = 1
-    LogoTag.Position = UDim2.new(0, 78, 0.5, 12)     -- adjusted for new logo size
+    LogoTag.Position = UDim2.new(0, 78, 0.5, 12)
     LogoTag.Size = UDim2.new(1,-60,0,13)
     LogoTag.Font = Enum.Font.Gotham
     LogoTag.Text = tag
@@ -332,25 +295,24 @@ function Vesper:CreateWindow(cfg)
     local LogoDiv = Instance.new("Frame", Sidebar)
     LogoDiv.BackgroundColor3 = T.Border
     LogoDiv.Position = UDim2.new(0,12,0,72)
-    LogoDiv.Size     = UDim2.new(1,-24,0,1)
+    LogoDiv.Size = UDim2.new(1,-24,0,1)
     LogoDiv.BorderSizePixel = 0
 
-    -- Tab button list
     local TabList = Instance.new("ScrollingFrame", Sidebar)
     TabList.BackgroundTransparency = 1
-    TabList.Position  = UDim2.new(0,0,0,80)
-    TabList.Size      = UDim2.new(1,0,1,-80)
+    TabList.Position = UDim2.new(0,0,0,80)
+    TabList.Size = UDim2.new(1,0,1,-80)
     TabList.ScrollBarThickness = 0
     TabList.CanvasSize = UDim2.new(0,0,0,0)
     AddPad(TabList, 6,6,8,8)
     local TabListLayout = AddList(TabList, 2)
-    TabListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    TabListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center 
 
     -- ── Header (title bar, right side) ───────────────────────────
     local Header = Instance.new("Frame", Main)
     Header.BackgroundTransparency = 1
     Header.Position = UDim2.new(0,190,0,0)
-    Header.Size     = UDim2.new(1,-190,0,52)
+    Header.Size = UDim2.new(1,-190,0,52)
     MakeDraggable(Header, Main)
 
     local TitleLabel = Instance.new("TextLabel", Header)
@@ -1423,28 +1385,26 @@ function Vesper:CreateWindow(cfg)
     -- ════════════════════════════════════════════════════════════
     local Bubble = Instance.new("Frame", Screen)
     Bubble.BackgroundColor3 = T.Background
-    Bubble.AnchorPoint      = Vector2.new(0,0)
-    Bubble.Position         = UDim2.new(0,20,0,20)
-    Bubble.Size             = UDim2.new(0, 60, 0, 60)
+    Bubble.AnchorPoint = Vector2.new(0,0)
+    Bubble.Position = UDim2.new(0,20,0,20)
+    Bubble.Size = UDim2.new(0, 60, 0, 60)
     AddCorner(Bubble, 100); AddStroke(Bubble, T.Accent, 2)
 
     local BubbleGlow = Instance.new("ImageLabel", Bubble)
     BubbleGlow.BackgroundTransparency = 1
     BubbleGlow.Position = UDim2.new(0,-10,0,-10)
-    BubbleGlow.Size     = UDim2.new(1,20,1,20)
-    BubbleGlow.Image    = "rbxassetid://4996891970"
+    BubbleGlow.Size = UDim2.new(1,20,1,20)
+    BubbleGlow.Image = "rbxassetid://4996891970"
     BubbleGlow.ImageColor3 = T.Accent
     BubbleGlow.ImageTransparency = 0.65
     BubbleGlow.ZIndex = 0
 
-    -- [FIX] Custom logo ImageLabel in bubble (replaces frame-based MakeLogo)
     MakeLogoImage(Bubble, 46, UDim2.new(0.5,0,0.5,0), Vector2.new(0.5,0.5), 2)
 
-    -- Transparent click layer on top of everything in the bubble
     local BubbleBtn = Instance.new("TextButton", Bubble)
     BubbleBtn.BackgroundTransparency = 1
-    BubbleBtn.Size   = UDim2.new(1,0,1,0)
-    BubbleBtn.Text   = ""
+    BubbleBtn.Size = UDim2.new(1,0,1,0)
+    BubbleBtn.Text = ""
     BubbleBtn.ZIndex = 10
     MakeDraggable(BubbleBtn, Bubble)
 
