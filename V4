@@ -295,9 +295,6 @@ function Vesper:CreateWindow(cfg)
     SideLine.Size     = UDim2.new(0,1,1,0)
     SideLine.BorderSizePixel = 0
 
-    Window.Main = Main
-    Window.Sidebar = Sidebar
-
     -- ── Sidebar logo area ─────────────────────────────────────────
     local LogoFrame = Instance.new("Frame", Sidebar)
     LogoFrame.BackgroundTransparency = 1
@@ -424,6 +421,9 @@ function Vesper:CreateWindow(cfg)
     Window._active  = nil
     Window._tabs    = {}
     Vesper._window  = Window
+
+    Window.Main = Main
+    Window.Sidebar = Sidebar
 
     local function SwitchTab(tab)
         if Window._active == tab then return end
