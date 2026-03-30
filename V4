@@ -300,7 +300,7 @@ function Vesper:CreateWindow(cfg)
     LogoFrame.Size = UDim2.new(1,0,0,72)
 
     -- [FIX] Custom logo ImageLabel in sidebar (replaces frame-based MakeLogo)
-    MakeLogoImage(LogoFrame, 36, UDim2.new(0, 10, 0.5, -18), nil, 2)
+    MakeLogoImage(LogoFrame, 58, UDim2.new(0, 8, 0.5, -29), nil, 2)
 
     local LogoName = Instance.new("TextLabel", LogoFrame)
     LogoName.BackgroundTransparency = 1
@@ -1428,7 +1428,7 @@ function Vesper:CreateWindow(cfg)
     BubbleGlow.ZIndex = 0
 
     -- [FIX] Custom logo ImageLabel in bubble (replaces frame-based MakeLogo)
-    MakeLogoImage(Bubble, 32, UDim2.new(0.5,0,0.5,0), Vector2.new(0.5,0.5), 2)
+    MakeLogoImage(Bubble, 44, UDim2.new(0.5,0,0.5,0), Vector2.new(0.5,0.5), 2)
 
     -- Transparent click layer on top of everything in the bubble
     local BubbleBtn = Instance.new("TextButton", Bubble)
