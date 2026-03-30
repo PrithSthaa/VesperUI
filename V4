@@ -115,30 +115,24 @@ end
 local function Icon(name) return Icons[name] or Icons["lucide-box"] or "" end
 
 -- ────────────────────────────────────────────────────────────────
---  CUSTOM LOGO BUILDER
---  Creates an ImageLabel using your uploaded logo asset.
---  Falls back to the gem logo if LOGO_ASSET_ID is not set.
+-- CUSTOM LOGO BUILDER (FIXED)
+-- Now uses Fit scaling + balanced sizing for perfect visual fit
 -- ────────────────────────────────────────────────────────────────
 function MakeLogoImage(parent, size, position, anchor, zindex)
     local ImageLabel = Instance.new("ImageLabel")
     ImageLabel.Parent = parent
-    ImageLabel.Size = UDim2.new(0, size, 0, size)
-    ImageLabel.Position = position
+    ImageLabel.Size = UDim2.new(0, size or 50, 0, size or 50)
+    ImageLabel.Position = position or UDim2.new(0.5,0,0.5,0)
     ImageLabel.BackgroundTransparency = 1
     ImageLabel.Image = LOGO_ASSET_ID
-
-    -- 🔥 ADD THESE LINES HERE
-    ImageLabel.ScaleType = Enum.ScaleType.Crop
+    ImageLabel.ScaleType = Enum.ScaleType.Fit          -- FIXED: was Crop
     ImageLabel.ClipsDescendants = true
-
     if anchor then
         ImageLabel.AnchorPoint = anchor
     end
-
     if zindex then
         ImageLabel.ZIndex = zindex
     end
-
     return ImageLabel
 end
 
@@ -301,38 +295,41 @@ function Vesper:CreateWindow(cfg)
     SideLine.Size     = UDim2.new(0,1,1,0)
     SideLine.BorderSizePixel = 0
 
+    Window.Main = Main
+    Window.Sidebar = Sidebar
+
     -- ── Sidebar logo area ─────────────────────────────────────────
     local LogoFrame = Instance.new("Frame", Sidebar)
     LogoFrame.BackgroundTransparency = 1
     LogoFrame.Size = UDim2.new(1,0,0,72)
 
-    -- [FIX] Custom logo ImageLabel in sidebar (replaces frame-based MakeLogo)
+    -- [FIXED] Logo now perfectly sized and centered
     MakeLogoImage(
         LogoFrame,
-        80, -- bigger than container on purpose
-        UDim2.new(0, 4, 0.5, -40),
-        nil,
+        54,                                      -- balanced size
+        UDim2.new(0, 12, 0.5, 0),                -- better left padding
+        Vector2.new(0, 0.5),                      -- anchored left-center
         2
     )
 
     local LogoName = Instance.new("TextLabel", LogoFrame)
     LogoName.BackgroundTransparency = 1
-    LogoName.Position = UDim2.new(0,54,0.5,-12)
-    LogoName.Size     = UDim2.new(1,-60,0,22)
-    LogoName.Font     = Enum.Font.GothamBold
-    LogoName.Text     = "Vesper"
+    LogoName.Position = UDim2.new(0, 78, 0.5, -12)   -- adjusted for new logo size
+    LogoName.Size = UDim2.new(1,-60,0,22)
+    LogoName.Font = Enum.Font.GothamBold
+    LogoName.Text = "Vesper"
     LogoName.TextColor3 = T.Text
-    LogoName.TextSize   = 16
+    LogoName.TextSize = 16
     LogoName.TextXAlignment = Enum.TextXAlignment.Left
 
     local LogoTag = Instance.new("TextLabel", LogoFrame)
     LogoTag.BackgroundTransparency = 1
-    LogoTag.Position = UDim2.new(0,54,0.5,12)
-    LogoTag.Size     = UDim2.new(1,-60,0,13)
-    LogoTag.Font     = Enum.Font.Gotham
-    LogoTag.Text     = tag
+    LogoTag.Position = UDim2.new(0, 78, 0.5, 12)     -- adjusted for new logo size
+    LogoTag.Size = UDim2.new(1,-60,0,13)
+    LogoTag.Font = Enum.Font.Gotham
+    LogoTag.Text = tag
     LogoTag.TextColor3 = T.Accent
-    LogoTag.TextSize   = 10
+    LogoTag.TextSize = 10
     LogoTag.TextXAlignment = Enum.TextXAlignment.Left
 
     local LogoDiv = Instance.new("Frame", Sidebar)
@@ -1441,7 +1438,7 @@ function Vesper:CreateWindow(cfg)
     BubbleGlow.ZIndex = 0
 
     -- [FIX] Custom logo ImageLabel in bubble (replaces frame-based MakeLogo)
-    MakeLogoImage(Bubble, 54, UDim2.new(0.5,0,0.5,0), Vector2.new(0.5,0.5), 2)
+    MakeLogoImage(Bubble, 46, UDim2.new(0.5,0,0.5,0), Vector2.new(0.5,0.5), 2)
 
     -- Transparent click layer on top of everything in the bubble
     local BubbleBtn = Instance.new("TextButton", Bubble)
@@ -1623,43 +1620,105 @@ function Vesper:CreateWindow(cfg)
     --        bubble frame (logo + glow + button) hides correctly.
     -- ════════════════════════════════════════════════════════════
     function Window:BuildUISection(tabAPI)
-        local sec = tabAPI:CreateSection({ Title = "Interface", Icon = "lucide-layout" })
+    local sec = tabAPI:CreateSection({ Title = "Interface", Icon = "lucide-layout" })
 
-        -- [FIX] Bubble visibility — set Bubble.Visible directly
-        --  This hides ALL children at once: logo ImageLabel, glow, BubbleBtn.
-        --  The old code only tweened BackgroundTransparency and set BubbleBtn.Active,
-        --  which left the logo frames still rendered and the button still visible.
-        sec:CreateToggle(nil, {
-            Title       = "Show Quick-Access Icon",
-            Description = "Floating gem icon when UI is hidden",
-            Default     = true,
-            Callback    = function(val)
-                Bubble.Visible = val   -- hides/shows everything at once
-            end,
-        })
+    -- Existing quick-access toggle
+    sec:CreateToggle(nil, {
+        Title = "Show Quick-Access Icon",
+        Description = "Floating gem icon when UI is hidden",
+        Default = true,
+        Callback = function(val)
+            Bubble.Visible = val
+        end,
+    })
 
-        -- Rebind toggle hotkey
-        sec:CreateKeybind(nil, {
-            Title       = "Toggle UI Hotkey",
-            Description = "Key that shows / hides the window  (default: RCtrl)",
-            Default     = hotkey.Name,
-            Mode        = "Always",
-            Callback    = function() end,
-            ChangedCallback = function(newKey)
-                hotkey = newKey
-                if Vesper._window then
-                    Vesper._window:Notify({
-                        Title   = "Hotkey Updated",
-                        Content = "Toggle UI is now bound to: " .. newKey.Name,
-                        Type    = "success",
-                        Duration = 3,
-                    })
+    -- NEW: Theme selection dropdown (live switch)
+    sec:CreateDropdown("UITheme", {
+        Title = "UI Theme",
+        Description = "Switch between available themes",
+        Values = {"Dark", "Midnight", "Ember"},
+        Default = "Dark",
+        Callback = function(themeName)
+            Vesper:SetTheme(themeName)
+            Vesper:Notify({
+                Title = "Theme Changed",
+                Content = "Switched to " .. themeName .. " theme.",
+                Type = "success",
+                Duration = 2.5
+            })
+        end,
+    })
+
+    -- NEW: Transparent/Glass background
+    sec:CreateToggle("GlassMode", {
+        Title = "Transparent Glass Background",
+        Description = "Semi-transparent glass-style effect (content stays readable)",
+        Default = false,
+        Callback = function(enabled)
+            if not Window.Main then return end
+            local main = Window.Main
+            local sidebar = Window.Sidebar
+
+            main.BackgroundTransparency = enabled and 0.32 or 0
+            if sidebar then sidebar.BackgroundTransparency = enabled and 0.35 or 0 end
+
+            -- Glass-style stroke enhancement
+            local stroke = main:FindFirstChildOfClass("UIStroke")
+            if stroke then
+                stroke.Transparency = enabled and 0.65 or 0
+                stroke.Thickness = enabled and 1.8 or 1.5
+            end
+        end,
+    })
+
+    -- NEW: Reset UI button (resets EVERY toggle/slider/etc. + theme + glass)
+    sec:CreateButton({
+        Title = "Reset UI to Defaults",
+        Description = "Restores all toggles, sliders, themes, and values",
+        Callback = function()
+            -- Reset all stored options to their original defaults
+            for key, elem in pairs(Vesper.Options) do
+                if elem and elem.SetValue and elem.Default ~= nil then
+                    elem:SetValue(elem.Default)
                 end
-            end,
-        })
+            end
+            -- Reset theme & glass
+            Vesper:SetTheme("Dark")
+            if Vesper.Options.GlassMode then
+                Vesper.Options.GlassMode:SetValue(false)
+            end
 
-        return sec
-    end
+            Vesper:Notify({
+                Title = "UI Reset Complete",
+                Content = "Every setting restored to default state.",
+                Type = "warning",
+                Duration = 4
+            })
+        end,
+    })
+
+    -- Existing hotkey (kept at the bottom)
+    sec:CreateKeybind(nil, {
+        Title = "Toggle UI Hotkey",
+        Description = "Key that shows / hides the window (default: RCtrl)",
+        Default = hotkey.Name,
+        Mode = "Always",
+        Callback = function() end,
+        ChangedCallback = function(newKey)
+            hotkey = newKey
+            if Vesper._window then
+                Vesper._window:Notify({
+                    Title = "Hotkey Updated",
+                    Content = "Toggle UI is now bound to: " .. newKey.Name,
+                    Type = "success",
+                    Duration = 3,
+                })
+            end
+        end,
+    })
+
+    return sec
+end
 
     return Window
 end -- CreateWindow
