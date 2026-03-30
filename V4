@@ -1,8 +1,18 @@
 -- ================================================================
---  Vesper UI Library  —  v3.0 (Updated)
---  Custom gem logo · Updated Midnight theme
---  Bubble visibility toggle · Rebindable hotkey in Settings
+--  Vesper UI Library  —  v3.0 (Fixed)
+--  Custom logo via ImageLabel · Toggle bug fixed · Rebindable hotkey
 -- ================================================================
+--  CHANGE LOG (v3.0 Fixed):
+--  [FIX] Bubble toggle now sets Bubble.Visible = val so ALL children
+--        (logo, glow, click button) show/hide together correctly.
+--  [NEW] Replace frame-based MakeLogo() with ImageLabel logo.
+--        Set YOUR_LOGO_ASSET_ID to your uploaded Roblox asset ID.
+-- ================================================================
+
+-- ▼▼▼ REPLACE THIS WITH YOUR UPLOADED ROBLOX ASSET ID ▼▼▼
+local LOGO_ASSET_ID = "rbxassetid://109251560"
+-- Upload VesperV1_transparent.png to Roblox Toolbox, then paste the ID above.
+-- ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 
 local CoreGui      = game:GetService("CoreGui")
 local TweenService = game:GetService("TweenService")
@@ -105,6 +115,27 @@ end
 local function Icon(name) return Icons[name] or Icons["lucide-box"] or "" end
 
 -- ────────────────────────────────────────────────────────────────
+--  CUSTOM LOGO BUILDER
+--  Creates an ImageLabel using your uploaded logo asset.
+--  Falls back to the gem logo if LOGO_ASSET_ID is not set.
+-- ────────────────────────────────────────────────────────────────
+local function MakeLogoImage(parent, pixelSize, position, anchorPoint, zBase)
+    pixelSize = pixelSize or 28
+    zBase     = zBase or 1
+
+    local Img = Instance.new("ImageLabel", parent)
+    Img.BackgroundTransparency = 1
+    Img.Size        = UDim2.new(0, pixelSize, 0, pixelSize)
+    Img.ZIndex      = zBase
+    Img.Image       = LOGO_ASSET_ID
+    Img.ImageColor3 = Color3.new(1, 1, 1)
+    Img.ScaleType   = Enum.ScaleType.Fit
+    if position    then Img.Position    = position    end
+    if anchorPoint then Img.AnchorPoint = anchorPoint end
+    return Img
+end
+
+-- ────────────────────────────────────────────────────────────────
 --  THEMES
 -- ────────────────────────────────────────────────────────────────
 local Themes = {
@@ -128,7 +159,6 @@ local Themes = {
         InputBg      = Color3.fromRGB(16,16,22),
     },
 
-    -- ── Midnight: deep indigo-violet, premium purple accent ─────
     Midnight = {
         Background   = Color3.fromRGB(7,  7,  18),
         Surface      = Color3.fromRGB(12, 12, 28),
@@ -140,7 +170,7 @@ local Themes = {
         Text         = Color3.fromRGB(232,228,255),
         SubText      = Color3.fromRGB(118,112,182),
         Muted        = Color3.fromRGB(60, 56, 104),
-        Accent       = Color3.fromRGB(132, 98, 255),   -- rich violet-purple
+        Accent       = Color3.fromRGB(132, 98, 255),
         AccentDim    = Color3.fromRGB(92,  64, 195),
         Positive     = Color3.fromRGB(52,211,153),
         Negative     = Color3.fromRGB(248,113,113),
@@ -194,7 +224,7 @@ function Vesper:CreateWindow(cfg)
 
     local titleText    = cfg.Title      or "Vesper"
     local subtitleText = cfg.Subtitle   or nil
-    local hotkey       = cfg.MinimizeKey or Enum.KeyCode.RightControl   -- mutable via settings
+    local hotkey       = cfg.MinimizeKey or Enum.KeyCode.RightControl
     local tag          = cfg.Tag        or "v" .. self.Version
 
     -- ── Cleanup ──────────────────────────────────────────────────
@@ -211,94 +241,6 @@ function Vesper:CreateWindow(cfg)
     Screen.ResetOnSpawn  = false
     Screen.DisplayOrder  = 999
     Screen.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-
-    -- ════════════════════════════════════════════════════════════
-    --  GEM LOGO BUILDER  (frame-based, no external assets needed)
-    --  Creates a diamond with a "V" cut into it.
-    --  pixelSize  – square canvas size in px
-    --  position   – UDim2 (optional)
-    --  anchorPoint– Vector2 (optional)
-    --  zBase      – base ZIndex
-    -- ════════════════════════════════════════════════════════════
-    local function MakeLogo(parent, pixelSize, position, anchorPoint, zBase)
-        pixelSize = pixelSize or 28
-        zBase     = zBase or 1
-
-        local Root = Instance.new("Frame", parent)
-        Root.BackgroundTransparency = 1
-        Root.Size   = UDim2.new(0, pixelSize, 0, pixelSize)
-        Root.ZIndex = zBase
-        if position    then Root.Position    = position    end
-        if anchorPoint then Root.AnchorPoint = anchorPoint end
-
-        -- Soft glow halo (behind diamond)
-        local Halo = Instance.new("ImageLabel", Root)
-        Halo.BackgroundTransparency = 1
-        Halo.AnchorPoint = Vector2.new(0.5, 0.5)
-        Halo.Position    = UDim2.new(0.5, 0, 0.5, 0)
-        Halo.Size        = UDim2.new(2.2, 0, 2.2, 0)
-        Halo.Image       = "rbxassetid://4996891970"
-        Halo.ImageColor3 = T.Accent
-        Halo.ImageTransparency = 0.70
-        Halo.ZIndex = zBase
-
-        -- Diamond background (rotated square = gem shape)
-        local inner = math.floor(pixelSize * 0.76)
-        local Diamond = Instance.new("Frame", Root)
-        Diamond.BackgroundColor3 = T.Accent
-        Diamond.AnchorPoint = Vector2.new(0.5, 0.5)
-        Diamond.Position    = UDim2.new(0.5, 0, 0.5, 0)
-        Diamond.Size        = UDim2.new(0, inner, 0, inner)
-        Diamond.Rotation    = 45
-        Diamond.ZIndex      = zBase + 1
-        AddCorner(Diamond, math.max(3, math.floor(inner * 0.19)))
-
-        -- Bottom-half dark shading for depth
-        local Shadow = Instance.new("Frame", Diamond)
-        Shadow.BackgroundColor3 = Color3.new(0, 0, 0)
-        Shadow.BackgroundTransparency = 0.60
-        Shadow.AnchorPoint = Vector2.new(0.5, 1)
-        Shadow.Position    = UDim2.new(0.5, 0, 1, 0)
-        Shadow.Size        = UDim2.new(1, 0, 0.48, 0)
-        Shadow.ZIndex      = zBase + 2
-        AddCorner(Shadow, math.max(3, math.floor(inner * 0.19)))
-
-        -- Top-left specular highlight
-        local Shine = Instance.new("Frame", Diamond)
-        Shine.BackgroundColor3 = Color3.new(1, 1, 1)
-        Shine.BackgroundTransparency = 0.72
-        Shine.AnchorPoint = Vector2.new(0.5, 0.5)
-        Shine.Position    = UDim2.new(0.36, 0, 0.32, 0)
-        Shine.Size        = UDim2.new(0.34, 0, 0.22, 0)
-        Shine.Rotation    = 0
-        Shine.ZIndex      = zBase + 3
-        AddCorner(Shine, 3)
-
-        -- V mark  — two angled white bars
-        local armW = math.max(2, math.floor(pixelSize * 0.115))
-        local armH = math.max(6, math.floor(pixelSize * 0.40))
-        local nudge = math.floor(pixelSize * 0.03)   -- slight downward shift
-
-        local VA = Instance.new("Frame", Root)
-        VA.BackgroundColor3 = Color3.new(1, 1, 1)
-        VA.AnchorPoint = Vector2.new(0.5, 0.5)
-        VA.Position    = UDim2.new(0.355, 0, 0.5, nudge)
-        VA.Size        = UDim2.new(0, armW, 0, armH)
-        VA.Rotation    = 24
-        VA.ZIndex      = zBase + 5
-        AddCorner(VA, math.floor(armW / 2))
-
-        local VB = Instance.new("Frame", Root)
-        VB.BackgroundColor3 = Color3.new(1, 1, 1)
-        VB.AnchorPoint = Vector2.new(0.5, 0.5)
-        VB.Position    = UDim2.new(0.645, 0, 0.5, nudge)
-        VB.Size        = UDim2.new(0, armW, 0, armH)
-        VB.Rotation    = -24
-        VB.ZIndex      = zBase + 5
-        AddCorner(VB, math.floor(armW / 2))
-
-        return Root
-    end
 
     -- ── Notification holder ──────────────────────────────────────
     local NotifHolder = Instance.new("Frame", Screen)
@@ -357,13 +299,13 @@ function Vesper:CreateWindow(cfg)
     LogoFrame.BackgroundTransparency = 1
     LogoFrame.Size = UDim2.new(1,0,0,72)
 
-    -- Custom gem logo at position of the old lucide-zap icon
-    MakeLogo(LogoFrame, 30, UDim2.new(0, 13, 0.5, -15), nil, 2)
+    -- [FIX] Custom logo ImageLabel in sidebar (replaces frame-based MakeLogo)
+    MakeLogoImage(LogoFrame, 36, UDim2.new(0, 10, 0.5, -18), nil, 2)
 
     local LogoName = Instance.new("TextLabel", LogoFrame)
     LogoName.BackgroundTransparency = 1
-    LogoName.Position = UDim2.new(0,52,0.5,-12)
-    LogoName.Size     = UDim2.new(1,-58,0,22)
+    LogoName.Position = UDim2.new(0,54,0.5,-12)
+    LogoName.Size     = UDim2.new(1,-60,0,22)
     LogoName.Font     = Enum.Font.GothamBold
     LogoName.Text     = "Vesper"
     LogoName.TextColor3 = T.Text
@@ -372,8 +314,8 @@ function Vesper:CreateWindow(cfg)
 
     local LogoTag = Instance.new("TextLabel", LogoFrame)
     LogoTag.BackgroundTransparency = 1
-    LogoTag.Position = UDim2.new(0,52,0.5,12)
-    LogoTag.Size     = UDim2.new(1,-58,0,13)
+    LogoTag.Position = UDim2.new(0,54,0.5,12)
+    LogoTag.Size     = UDim2.new(1,-60,0,13)
     LogoTag.Font     = Enum.Font.Gotham
     LogoTag.Text     = tag
     LogoTag.TextColor3 = T.Accent
@@ -1467,7 +1409,7 @@ function Vesper:CreateWindow(cfg)
 
     -- ════════════════════════════════════════════════════════════
     --  BUBBLE (Quick-access floating icon)
-    --  Uses the gem logo — no more plain "V" text
+    --  Uses custom ImageLabel logo — no frame-based gem
     -- ════════════════════════════════════════════════════════════
     local Bubble = Instance.new("Frame", Screen)
     Bubble.BackgroundColor3 = T.Background
@@ -1485,8 +1427,8 @@ function Vesper:CreateWindow(cfg)
     BubbleGlow.ImageTransparency = 0.65
     BubbleGlow.ZIndex = 0
 
-    -- Gem logo inside the bubble (centred, 30px)
-    MakeLogo(Bubble, 30, UDim2.new(0.5,0,0.5,0), Vector2.new(0.5,0.5), 2)
+    -- [FIX] Custom logo ImageLabel in bubble (replaces frame-based MakeLogo)
+    MakeLogoImage(Bubble, 32, UDim2.new(0.5,0,0.5,0), Vector2.new(0.5,0.5), 2)
 
     -- Transparent click layer on top of everything in the bubble
     local BubbleBtn = Instance.new("TextButton", Bubble)
@@ -1663,42 +1605,35 @@ function Vesper:CreateWindow(cfg)
     end
 
     -- ════════════════════════════════════════════════════════════
-    --  BUILD UI SECTION  (NEW)
-    --  Adds "Interface" controls to any tab's section:
-    --    • Show/Hide the bubble icon
-    --    • Rebind the toggle hotkey
-    --
-    --  Usage:
-    --      Window:BuildUISection(Tabs.Settings)
+    --  BUILD UI SECTION
+    --  [FIX] Toggle now uses Bubble.Visible = val so the entire
+    --        bubble frame (logo + glow + button) hides correctly.
     -- ════════════════════════════════════════════════════════════
     function Window:BuildUISection(tabAPI)
         local sec = tabAPI:CreateSection({ Title = "Interface", Icon = "lucide-layout" })
 
-        -- Toggle bubble visibility
+        -- [FIX] Bubble visibility — set Bubble.Visible directly
+        --  This hides ALL children at once: logo ImageLabel, glow, BubbleBtn.
+        --  The old code only tweened BackgroundTransparency and set BubbleBtn.Active,
+        --  which left the logo frames still rendered and the button still visible.
         sec:CreateToggle(nil, {
             Title       = "Show Quick-Access Icon",
             Description = "Floating gem icon when UI is hidden",
             Default     = true,
             Callback    = function(val)
-                TweenPlay(Bubble, { BackgroundTransparency = val and 0 or 1 }, 0.2)
-                BubbleGlow.Visible = val
-                BubbleBtn.Active   = val
-                -- Keep it technically visible so it can still be shown; just hidden visually
-                -- For a hard hide: Bubble.Visible = val
+                Bubble.Visible = val   -- hides/shows everything at once
             end,
         })
 
         -- Rebind toggle hotkey
-        --   Mode "Always" so the ChangedCallback fires when the key is pressed
-        --   but the bound key itself becomes the new hotkey via ChangedCallback
         sec:CreateKeybind(nil, {
             Title       = "Toggle UI Hotkey",
             Description = "Key that shows / hides the window  (default: RCtrl)",
             Default     = hotkey.Name,
             Mode        = "Always",
-            Callback    = function() end,   -- no-op; hotkey is handled by UIS above
+            Callback    = function() end,
             ChangedCallback = function(newKey)
-                hotkey = newKey   -- updates the closure used by UIS.InputBegan
+                hotkey = newKey
                 if Vesper._window then
                     Vesper._window:Notify({
                         Title   = "Hotkey Updated",
@@ -1855,7 +1790,6 @@ Vesper.SaveManager = (function()
         return list
     end
 
-    -- BuildConfigSection  (unchanged from original + auto-ignores its own keys)
     function SM:BuildConfigSection(tabAPI)
         local sec = tabAPI:CreateSection({ Title = "Configuration", Icon = "lucide-save" })
         local self2 = self
@@ -1921,3 +1855,156 @@ end)()
 -- ════════════════════════════════════════════════════════════════
 return Vesper
 -- ════════════════════════════════════════════════════════════════
+--[[
+╔══════════════════════════════════════════════════════════════════╗
+║                    FULL USAGE EXAMPLE                           ║
+╚══════════════════════════════════════════════════════════════════╝
+
+local Vesper = loadstring(game:HttpGet("YOUR_RAW_URL"))()
+local SaveManager = Vesper.SaveManager
+
+-- Optional: change theme  (Dark / Midnight / Ember)
+-- Vesper:SetTheme("Midnight")
+
+local Window = Vesper:CreateWindow({
+    Title       = 'Vesper Hub <font color="rgb(139,92,246)">v3</font>',
+    Subtitle    = "by you",
+    MinimizeKey = Enum.KeyCode.RightControl,
+    Tag         = "Premium Build",
+})
+
+local Tabs = {
+    Main     = Window:AddTab({ Title = "Main",     Icon = "lucide-home"     }),
+    Combat   = Window:AddTab({ Title = "Combat",   Icon = "lucide-swords"   }),
+    Settings = Window:AddTab({ Title = "Settings", Icon = "lucide-settings" }),
+}
+
+-- ── Main tab ───────────────────────────────────────────────────
+local General = Tabs.Main:CreateSection({ Title = "General", Icon = "lucide-zap" })
+
+General:CreateParagraph({
+    Title   = "Welcome",
+    Content = "This is Vesper v3.\nEnjoy the professional UI experience.",
+})
+
+local SpeedToggle = General:CreateToggle("SpeedHack", {
+    Title       = "Speed Hack",
+    Description = "Enables boosted walk speed",
+    Default     = false,
+    Callback    = function(state)
+        -- your code
+    end,
+})
+
+SpeedToggle:OnChanged(function(state)
+    print("Speed hack is now:", state)
+end)
+
+-- Toggle from code:
+-- SpeedToggle:SetValue(true)
+-- SpeedToggle:GetState()  → bool
+
+local SpeedSlider = General:CreateSlider("SpeedValue", {
+    Title       = "Walk Speed",
+    Description = "How fast the player moves",
+    Default     = 16,
+    Min         = 16,
+    Max         = 500,
+    Rounding    = 0,
+    Suffix      = " sp",
+    Callback    = function(value)
+        -- game.Players.LocalPlayer.Character.Humanoid.WalkSpeed = value
+    end,
+})
+
+SpeedSlider:OnChanged(function(value)
+    print("Speed:", value)
+end)
+
+General:CreateButton({
+    Title       = "Reset Speed",
+    Description = "Returns walk speed to default",
+    Callback    = function()
+        SpeedSlider:SetValue(16)
+    end,
+})
+
+-- ── Combat tab ─────────────────────────────────────────────────
+local EventSec = Tabs.Combat:CreateSection({ Title = "Events" })
+
+local EventDrop = EventSec:CreateDropdown("TargetEvent", {
+    Title   = "Target Event",
+    Values  = {"Scylla", "Kraken", "Megalodon", "Leviathan"},
+    Multi   = false,
+    Default = "Scylla",
+    Callback = function(v) print("Target:", v) end,
+})
+
+EventDrop:OnChanged(function(v) print("Changed to:", v) end)
+EventDrop:SetValue("Kraken")
+
+local BuffDrop = EventSec:CreateDropdown("ActiveBuffs", {
+    Title       = "Active Buffs",
+    Description = "You can select multiple",
+    Values      = {"Haste", "Luck", "Strength", "Fortune"},
+    Multi       = true,
+    Default     = {"Haste"},
+    Callback    = function(t) print(table.concat(t,", ")) end,
+})
+
+-- ── Settings tab ───────────────────────────────────────────────
+local UISec = Tabs.Settings:CreateSection({ Title = "Interface", Icon = "lucide-palette" })
+
+local Picker = UISec:CreateColorPicker("AccentColor", {
+    Title    = "Accent Color",
+    Default  = Color3.fromRGB(139, 92, 246),
+    Callback = function(c) print("Color:", c) end,
+})
+
+Picker:OnChanged(function()
+    print("New color:", Picker.Value)
+end)
+
+UISec:CreateColorPicker("AccentWithAlpha", {
+    Title        = "Color + Transparency",
+    Description  = "Supports alpha channel",
+    Default      = Color3.fromRGB(139, 92, 246),
+    Transparency = 0,
+    Callback     = function(c, t) print("Color:", c, "Trans:", t) end,
+})
+
+local HotKey = UISec:CreateKeybind("UIHotkey", {
+    Title    = "Toggle UI",
+    Mode     = "Toggle",
+    Default  = "RightControl",
+    Callback = function(state) print("UI toggle state:", state) end,
+    ChangedCallback = function(newKey) print("Rebound to:", newKey) end,
+})
+HotKey:OnClick(function() print("Hotkey clicked!") end)
+
+UISec:CreateTextBox("WebhookURL", {
+    Title       = "Discord Webhook",
+    Description = "Sends alerts to your server",
+    Placeholder = "https://discord.com/api/webhooks/...",
+    Finished    = true,
+    Callback    = function(v) print("Webhook set:", v) end,
+})
+
+-- ── SaveManager ────────────────────────────────────────────────
+SaveManager:SetFolder("VesperHub/MyGame")
+SaveManager:SetIgnoreIndexes({ "_cfgName", "_cfgDrop" })
+SaveManager:BuildConfigSection(Tabs.Settings)
+Window:BuildUISection(Tabs.Settings)
+
+Window:SelectTab(1)
+
+Vesper:Notify({
+    Title   = "Vesper Loaded",
+    Content = "Script injected successfully.",
+    Type    = "success",
+    Duration = 6,
+})
+
+-- Load autoload config last
+SaveManager:LoadAutoloadConfig()
+]]
