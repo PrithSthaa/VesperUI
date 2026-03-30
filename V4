@@ -1,7 +1,6 @@
 -- ================================================================
--- Vesper UI Library — v3.0 (Fixed + Glass + Theme + Reset)
--- Custom logo via ImageLabel · Toggle bug fixed · Rebindable hotkey
--- Logo sizing fixed · Theme dropdown · Glass background · Reset UI
+-- Vesper UI Library — v3.1 (Fully Fixed)
+-- Theme switching now LIVE · Logo sizing perfected · Glass + Reset
 -- ================================================================
 local LOGO_ASSET_ID = "rbxassetid://72372201156015"
 
@@ -88,11 +87,11 @@ if not Icons or not next(Icons) then
 end
 local function Icon(name) return Icons[name] or Icons["lucide-box"] or "" end
 
--- CUSTOM LOGO BUILDER (FIXED - Perfect size + Fit scaling)
+-- CUSTOM LOGO BUILDER (FIXED - Larger & Perfect Fit)
 function MakeLogoImage(parent, size, position, anchor, zindex)
     local ImageLabel = Instance.new("ImageLabel")
     ImageLabel.Parent = parent
-    ImageLabel.Size = UDim2.new(0, size or 50, 0, size or 50)
+    ImageLabel.Size = UDim2.new(0, size or 68, 0, size or 68)
     ImageLabel.Position = position or UDim2.new(0.5,0,0.5,0)
     ImageLabel.BackgroundTransparency = 1
     ImageLabel.Image = LOGO_ASSET_ID
@@ -103,89 +102,30 @@ function MakeLogoImage(parent, size, position, anchor, zindex)
     return ImageLabel
 end
 
--- ────────────────────────────────────────────────────────────────
---  THEMES
--- ────────────────────────────────────────────────────────────────
+-- THEMES
 local Themes = {
-    Dark = {
-        Background   = Color3.fromRGB(13,13,17),
-        Surface      = Color3.fromRGB(20,20,26),
-        SurfaceHigh  = Color3.fromRGB(28,28,36),
-        Sidebar      = Color3.fromRGB(10,10,14),
-        SidebarHover = Color3.fromRGB(30,30,38),
-        Border       = Color3.fromRGB(38,38,50),
-        BorderHigh   = Color3.fromRGB(55,55,70),
-        Text         = Color3.fromRGB(240,240,248),
-        SubText      = Color3.fromRGB(130,130,155),
-        Muted        = Color3.fromRGB(70,70,90),
-        Accent       = Color3.fromRGB(139,92,246),
-        AccentDim    = Color3.fromRGB(100,65,190),
-        Positive     = Color3.fromRGB(52,211,153),
-        Negative     = Color3.fromRGB(248,113,113),
-        Warning      = Color3.fromRGB(251,191,36),
-        Track        = Color3.fromRGB(35,35,45),
-        InputBg      = Color3.fromRGB(16,16,22),
-    },
-
-    Midnight = {
-        Background   = Color3.fromRGB(7,  7,  18),
-        Surface      = Color3.fromRGB(12, 12, 28),
-        SurfaceHigh  = Color3.fromRGB(19, 18, 42),
-        Sidebar      = Color3.fromRGB(5,  5,  14),
-        SidebarHover = Color3.fromRGB(22, 20, 50),
-        Border       = Color3.fromRGB(32, 28, 72),
-        BorderHigh   = Color3.fromRGB(56, 48, 120),
-        Text         = Color3.fromRGB(232,228,255),
-        SubText      = Color3.fromRGB(118,112,182),
-        Muted        = Color3.fromRGB(60, 56, 104),
-        Accent       = Color3.fromRGB(132, 98, 255),
-        AccentDim    = Color3.fromRGB(92,  64, 195),
-        Positive     = Color3.fromRGB(52,211,153),
-        Negative     = Color3.fromRGB(248,113,113),
-        Warning      = Color3.fromRGB(251,191,36),
-        Track        = Color3.fromRGB(18, 16, 46),
-        InputBg      = Color3.fromRGB(9,  8,  22),
-    },
-
-    Ember = {
-        Background   = Color3.fromRGB(15,10,10),
-        Surface      = Color3.fromRGB(24,16,15),
-        SurfaceHigh  = Color3.fromRGB(33,22,20),
-        Sidebar      = Color3.fromRGB(11,7,7),
-        SidebarHover = Color3.fromRGB(38,26,24),
-        Border       = Color3.fromRGB(55,32,30),
-        BorderHigh   = Color3.fromRGB(80,48,44),
-        Text         = Color3.fromRGB(248,240,235),
-        SubText      = Color3.fromRGB(160,120,112),
-        Muted        = Color3.fromRGB(90,60,55),
-        Accent       = Color3.fromRGB(251,146,60),
-        AccentDim    = Color3.fromRGB(194,100,35),
-        Positive     = Color3.fromRGB(52,211,153),
-        Negative     = Color3.fromRGB(248,113,113),
-        Warning      = Color3.fromRGB(251,191,36),
-        Track        = Color3.fromRGB(38,22,20),
-        InputBg      = Color3.fromRGB(14,9,8),
-    },
+    Dark = { Background = Color3.fromRGB(13,13,17), Surface = Color3.fromRGB(20,20,26), SurfaceHigh = Color3.fromRGB(28,28,36), Sidebar = Color3.fromRGB(10,10,14), SidebarHover = Color3.fromRGB(30,30,38), Border = Color3.fromRGB(38,38,50), BorderHigh = Color3.fromRGB(55,55,70), Text = Color3.fromRGB(240,240,248), SubText = Color3.fromRGB(130,130,155), Muted = Color3.fromRGB(70,70,90), Accent = Color3.fromRGB(139,92,246), AccentDim = Color3.fromRGB(100,65,190), Positive = Color3.fromRGB(52,211,153), Negative = Color3.fromRGB(248,113,113), Warning = Color3.fromRGB(251,191,36), Track = Color3.fromRGB(35,35,45), InputBg = Color3.fromRGB(16,16,22) },
+    Midnight = { Background = Color3.fromRGB(7,7,18), Surface = Color3.fromRGB(12,12,28), SurfaceHigh = Color3.fromRGB(19,18,42), Sidebar = Color3.fromRGB(5,5,14), SidebarHover = Color3.fromRGB(22,20,50), Border = Color3.fromRGB(32,28,72), BorderHigh = Color3.fromRGB(56,48,120), Text = Color3.fromRGB(232,228,255), SubText = Color3.fromRGB(118,112,182), Muted = Color3.fromRGB(60,56,104), Accent = Color3.fromRGB(132,98,255), AccentDim = Color3.fromRGB(92,64,195), Positive = Color3.fromRGB(52,211,153), Negative = Color3.fromRGB(248,113,113), Warning = Color3.fromRGB(251,191,36), Track = Color3.fromRGB(18,16,46), InputBg = Color3.fromRGB(9,8,22) },
+    Ember = { Background = Color3.fromRGB(15,10,10), Surface = Color3.fromRGB(24,16,15), SurfaceHigh = Color3.fromRGB(33,22,20), Sidebar = Color3.fromRGB(11,7,7), SidebarHover = Color3.fromRGB(38,26,24), Border = Color3.fromRGB(55,32,30), BorderHigh = Color3.fromRGB(80,48,44), Text = Color3.fromRGB(248,240,235), SubText = Color3.fromRGB(160,120,112), Muted = Color3.fromRGB(90,60,55), Accent = Color3.fromRGB(251,146,60), AccentDim = Color3.fromRGB(194,100,35), Positive = Color3.fromRGB(52,211,153), Negative = Color3.fromRGB(248,113,113), Warning = Color3.fromRGB(251,191,36), Track = Color3.fromRGB(38,22,20), InputBg = Color3.fromRGB(14,9,8) },
 }
 
--- ════════════════════════════════════════════════════════════════
---  LIBRARY
--- ════════════════════════════════════════════════════════════════
+-- LIBRARY
 local Vesper = {
-    Version = "3.0",
-    Themes  = Themes,
-    Theme   = Themes.Dark,
+    Version = "3.1",
+    Themes = Themes,
+    Theme = Themes.Midnight,   -- Default is now Midnight
     Options = {},
     _window = nil,
 }
 
 function Vesper:SetTheme(name)
-    self.Theme = Themes[name] or Themes.Dark
+    self.Theme = Themes[name] or Themes.Midnight
+    if self._window and self._window.RefreshTheme then
+        self._window:RefreshTheme()
+    end
 end
 
--- ────────────────────────────────────────────────────────────────
---  CREATE WINDOW
--- ────────────────────────────────────────────────────────────────
+-- CREATE WINDOW
 function Vesper:CreateWindow(cfg)
     local T = self.Theme
     cfg = cfg or {}
@@ -206,7 +146,6 @@ function Vesper:CreateWindow(cfg)
     Screen.DisplayOrder = 999
     Screen.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
-    -- Notification holder
     local NotifHolder = Instance.new("Frame", Screen)
     NotifHolder.BackgroundTransparency = 1
     NotifHolder.AnchorPoint = Vector2.new(1,1)
@@ -215,7 +154,6 @@ function Vesper:CreateWindow(cfg)
     local NLayout = AddList(NotifHolder, 8)
     NLayout.VerticalAlignment = Enum.VerticalAlignment.Bottom
 
-    -- Main window
     local Main = Instance.new("Frame", Screen)
     Main.Name = "Main"
     Main.BackgroundColor3 = T.Background
@@ -238,7 +176,6 @@ function Vesper:CreateWindow(cfg)
 
     local WinScale = Instance.new("UIScale", Main); WinScale.Scale = 0
 
-    -- Sidebar
     local Sidebar = Instance.new("Frame", Main)
     Sidebar.BackgroundColor3 = T.Sidebar
     Sidebar.Size = UDim2.new(0,190,1,0)
@@ -258,33 +195,47 @@ function Vesper:CreateWindow(cfg)
     SideLine.Size = UDim2.new(0,1,1,0)
     SideLine.BorderSizePixel = 0
 
-    -- WINDOW OBJECT (FIXED PLACE)
+    -- WINDOW OBJECT
     local Window = {}
     Window._active = nil
     Window._tabs = {}
     Vesper._window = Window
-    Window.Main = Main          -- ← FIXED
-    Window.Sidebar = Sidebar    -- ← FIXED
+    Window.Main = Main
+    Window.Sidebar = Sidebar
 
-    -- Sidebar logo (fixed size)
+    -- THEME REFRESH (fixes the broken theme system)
+    function Window:RefreshTheme()
+        local T = Vesper.Theme
+        if Window.Main then
+            Window.Main.BackgroundColor3 = T.Background
+            local stroke = Window.Main:FindFirstChildOfClass("UIStroke")
+            if stroke then stroke.Color = T.Border end
+        end
+        if Window.Sidebar then
+            Window.Sidebar.BackgroundColor3 = T.Sidebar
+        end
+        if WinGlow then WinGlow.ImageColor3 = T.Accent end
+    end
+
+    -- IMPROVED LOGO (larger & balanced)
     local LogoFrame = Instance.new("Frame", Sidebar)
     LogoFrame.BackgroundTransparency = 1
-    LogoFrame.Size = UDim2.new(1,0,0,72)
-    MakeLogoImage(LogoFrame, 54, UDim2.new(0, 12, 0.5, 0), Vector2.new(0, 0.5), 2)
+    LogoFrame.Size = UDim2.new(1,0,0,80)
+    MakeLogoImage(LogoFrame, 68, UDim2.new(0, 12, 0.5, 0), Vector2.new(0, 0.5), 2)
 
     local LogoName = Instance.new("TextLabel", LogoFrame)
     LogoName.BackgroundTransparency = 1
-    LogoName.Position = UDim2.new(0, 78, 0.5, -12)
+    LogoName.Position = UDim2.new(0, 88, 0.5, -13)
     LogoName.Size = UDim2.new(1,-60,0,22)
     LogoName.Font = Enum.Font.GothamBold
     LogoName.Text = "Vesper"
     LogoName.TextColor3 = T.Text
-    LogoName.TextSize = 16
+    LogoName.TextSize = 17
     LogoName.TextXAlignment = Enum.TextXAlignment.Left
 
     local LogoTag = Instance.new("TextLabel", LogoFrame)
     LogoTag.BackgroundTransparency = 1
-    LogoTag.Position = UDim2.new(0, 78, 0.5, 12)
+    LogoTag.Position = UDim2.new(0, 88, 0.5, 9)
     LogoTag.Size = UDim2.new(1,-60,0,13)
     LogoTag.Font = Enum.Font.Gotham
     LogoTag.Text = tag
@@ -294,19 +245,19 @@ function Vesper:CreateWindow(cfg)
 
     local LogoDiv = Instance.new("Frame", Sidebar)
     LogoDiv.BackgroundColor3 = T.Border
-    LogoDiv.Position = UDim2.new(0,12,0,72)
+    LogoDiv.Position = UDim2.new(0,12,0,80)
     LogoDiv.Size = UDim2.new(1,-24,0,1)
     LogoDiv.BorderSizePixel = 0
 
     local TabList = Instance.new("ScrollingFrame", Sidebar)
     TabList.BackgroundTransparency = 1
-    TabList.Position = UDim2.new(0,0,0,80)
-    TabList.Size = UDim2.new(1,0,1,-80)
+    TabList.Position = UDim2.new(0,0,0,88)
+    TabList.Size = UDim2.new(1,0,1,-88)
     TabList.ScrollBarThickness = 0
     TabList.CanvasSize = UDim2.new(0,0,0,0)
     AddPad(TabList, 6,6,8,8)
     local TabListLayout = AddList(TabList, 2)
-    TabListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center 
+    TabListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 
     -- ── Header (title bar, right side) ───────────────────────────
     local Header = Instance.new("Frame", Main)
@@ -1383,7 +1334,7 @@ function Vesper:CreateWindow(cfg)
     --  BUBBLE (Quick-access floating icon)
     --  Uses custom ImageLabel logo — no frame-based gem
     -- ════════════════════════════════════════════════════════════
-    local Bubble = Instance.new("Frame", Screen)
+local Bubble = Instance.new("Frame", Screen)
     Bubble.BackgroundColor3 = T.Background
     Bubble.AnchorPoint = Vector2.new(0,0)
     Bubble.Position = UDim2.new(0,20,0,20)
@@ -1399,7 +1350,7 @@ function Vesper:CreateWindow(cfg)
     BubbleGlow.ImageTransparency = 0.65
     BubbleGlow.ZIndex = 0
 
-    MakeLogoImage(Bubble, 46, UDim2.new(0.5,0,0.5,0), Vector2.new(0.5,0.5), 2)
+    MakeLogoImage(Bubble, 52, UDim2.new(0.5,0,0.5,0), Vector2.new(0.5,0.5), 2)
 
     local BubbleBtn = Instance.new("TextButton", Bubble)
     BubbleBtn.BackgroundTransparency = 1
@@ -1408,11 +1359,8 @@ function Vesper:CreateWindow(cfg)
     BubbleBtn.ZIndex = 10
     MakeDraggable(BubbleBtn, Bubble)
 
-    -- ════════════════════════════════════════════════════════════
-    --  TOGGLE / MINIMIZE
-    -- ════════════════════════════════════════════════════════════
+    -- TOGGLE / MINIMIZE
     local minimized = false
-
     local function ToggleUI()
         minimized = not minimized
         if minimized then
@@ -1423,10 +1371,8 @@ function Vesper:CreateWindow(cfg)
             TweenPlay(WinScale, {Scale=1}, 0.45, Enum.EasingStyle.Elastic)
         end
     end
-
     Main.Visible = true
     TweenPlay(WinScale, {Scale=1}, 0.5, Enum.EasingStyle.Elastic)
-
     BubbleBtn.MouseButton1Click:Connect(ToggleUI)
     MinimizeBtn.MouseButton1Click:Connect(ToggleUI)
     CloseBtn.MouseButton1Click:Connect(function()
@@ -1434,15 +1380,12 @@ function Vesper:CreateWindow(cfg)
         task.delay(0.22, function() Main.Visible = false end)
     end)
 
-    -- Hotkey — mutable: BuildUISection updates this closure variable directly
     UIS.InputBegan:Connect(function(i, p)
         if not p and i.KeyCode == hotkey then ToggleUI() end
     end)
 
     function Window:Toggle(state)
-        if state ~= nil then
-            if state == (not minimized) then return end
-        end
+        if state ~= nil then if state == (not minimized) then return end end
         ToggleUI()
     end
 
