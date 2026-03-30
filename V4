@@ -87,11 +87,11 @@ if not Icons or not next(Icons) then
 end
 local function Icon(name) return Icons[name] or Icons["lucide-box"] or "" end
 
--- CUSTOM LOGO BUILDER (PERFECTLY FITTING)
+-- CUSTOM LOGO BUILDER (NOW MUCH BIGGER + PERFECT FIT)
 function MakeLogoImage(parent, size, position, anchor, zindex)
     local ImageLabel = Instance.new("ImageLabel")
     ImageLabel.Parent = parent
-    ImageLabel.Size = UDim2.new(0, size or 78, 0, size or 78)
+    ImageLabel.Size = UDim2.new(0, size or 95, 0, size or 95)
     ImageLabel.Position = position or UDim2.new(0.5,0,0.5,0)
     ImageLabel.BackgroundTransparency = 1
     ImageLabel.Image = LOGO_ASSET_ID
@@ -204,7 +204,7 @@ function Vesper:CreateWindow(cfg)
     Window.Sidebar = Sidebar
 
     -- LIVE THEME REFRESH (fixes the broken theme system)
-    function Window:RefreshTheme()
+function Window:RefreshTheme()
         local T = Vesper.Theme
         if Window.Main then
             Window.Main.BackgroundColor3 = T.Background
@@ -215,32 +215,27 @@ function Vesper:CreateWindow(cfg)
             Window.Sidebar.BackgroundColor3 = T.Sidebar
         end
         if WinGlow then WinGlow.ImageColor3 = T.Accent end
-        -- Update all existing tabs/sections (this makes dropdown work instantly)
-        for _, tab in ipairs(Window._tabs or {}) do
-            if tab._btn then tab._btn.BackgroundColor3 = T.Sidebar end
-            if tab._bar then tab._bar.BackgroundColor3 = T.Accent end
-        end
     end
 
     -- PERFECTLY FITTING LOGO (larger container + bigger logo)
-    local LogoFrame = Instance.new("Frame", Sidebar)
+local LogoFrame = Instance.new("Frame", Sidebar)
     LogoFrame.BackgroundTransparency = 1
-    LogoFrame.Size = UDim2.new(1,0,0,92)   -- increased container size
-    MakeLogoImage(LogoFrame, 78, UDim2.new(0, 12, 0.5, 0), Vector2.new(0, 0.5), 2)  -- bigger logo
+    LogoFrame.Size = UDim2.new(1,0,0,120)   -- bigger container
+    MakeLogoImage(LogoFrame, 95, UDim2.new(0, 15, 0.5, 0), Vector2.new(0, 0.5), 2)  -- 95px logo - much larger
 
     local LogoName = Instance.new("TextLabel", LogoFrame)
     LogoName.BackgroundTransparency = 1
-    LogoName.Position = UDim2.new(0, 98, 0.5, -15)
-    LogoName.Size = UDim2.new(1,-60,0,24)
+    LogoName.Position = UDim2.new(0, 118, 0.5, -18)
+    LogoName.Size = UDim2.new(1,-60,0,26)
     LogoName.Font = Enum.Font.GothamBold
     LogoName.Text = "Vesper"
     LogoName.TextColor3 = T.Text
-    LogoName.TextSize = 18
+    LogoName.TextSize = 19
     LogoName.TextXAlignment = Enum.TextXAlignment.Left
 
     local LogoTag = Instance.new("TextLabel", LogoFrame)
     LogoTag.BackgroundTransparency = 1
-    LogoTag.Position = UDim2.new(0, 98, 0.5, 9)
+    LogoTag.Position = UDim2.new(0, 118, 0.5, 9)
     LogoTag.Size = UDim2.new(1,-60,0,13)
     LogoTag.Font = Enum.Font.Gotham
     LogoTag.Text = tag
@@ -250,14 +245,14 @@ function Vesper:CreateWindow(cfg)
 
     local LogoDiv = Instance.new("Frame", Sidebar)
     LogoDiv.BackgroundColor3 = T.Border
-    LogoDiv.Position = UDim2.new(0,12,0,92)
+    LogoDiv.Position = UDim2.new(0,12,0,120)
     LogoDiv.Size = UDim2.new(1,-24,0,1)
     LogoDiv.BorderSizePixel = 0
 
     local TabList = Instance.new("ScrollingFrame", Sidebar)
     TabList.BackgroundTransparency = 1
-    TabList.Position = UDim2.new(0,0,0,100)
-    TabList.Size = UDim2.new(1,0,1,-100)
+    TabList.Position = UDim2.new(0,0,0,128)
+    TabList.Size = UDim2.new(1,0,1,-128)
     TabList.ScrollBarThickness = 0
     TabList.CanvasSize = UDim2.new(0,0,0,0)
     AddPad(TabList, 6,6,8,8)
@@ -1339,11 +1334,11 @@ function Vesper:CreateWindow(cfg)
     --  BUBBLE (Quick-access floating icon)
     --  Uses custom ImageLabel logo — no frame-based gem
     -- ════════════════════════════════════════════════════════════
-    local Bubble = Instance.new("Frame", Screen)
+ local Bubble = Instance.new("Frame", Screen)
     Bubble.BackgroundColor3 = T.Background
     Bubble.AnchorPoint = Vector2.new(0,0)
     Bubble.Position = UDim2.new(0,20,0,20)
-    Bubble.Size = UDim2.new(0, 64, 0, 64)
+    Bubble.Size = UDim2.new(0, 68, 0, 68)
     AddCorner(Bubble, 100); AddStroke(Bubble, T.Accent, 2)
 
     local BubbleGlow = Instance.new("ImageLabel", Bubble)
@@ -1355,7 +1350,7 @@ function Vesper:CreateWindow(cfg)
     BubbleGlow.ImageTransparency = 0.65
     BubbleGlow.ZIndex = 0
 
-    MakeLogoImage(Bubble, 56, UDim2.new(0.5,0,0.5,0), Vector2.new(0.5,0.5), 2)
+    MakeLogoImage(Bubble, 58, UDim2.new(0.5,0,0.5,0), Vector2.new(0.5,0.5), 2)
 
     local BubbleBtn = Instance.new("TextButton", Bubble)
     BubbleBtn.BackgroundTransparency = 1
@@ -1536,9 +1531,6 @@ function Window:BuildUISection(tabAPI)
         sec:CreateKeybind(nil, { Title = "Toggle UI Hotkey", Description = "Key that shows / hides the window (default: RCtrl)", Default = hotkey.Name, Mode = "Always", ChangedCallback = function(newKey) hotkey = newKey end })
         return sec
     end
-
-    return Window
-end
 
 -- ════════════════════════════════════════════════════════════════
 --  GLOBAL NOTIFY
