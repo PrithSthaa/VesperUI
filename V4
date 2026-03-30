@@ -119,20 +119,27 @@ local function Icon(name) return Icons[name] or Icons["lucide-box"] or "" end
 --  Creates an ImageLabel using your uploaded logo asset.
 --  Falls back to the gem logo if LOGO_ASSET_ID is not set.
 -- ────────────────────────────────────────────────────────────────
-local function MakeLogoImage(parent, pixelSize, position, anchorPoint, zBase)
-    pixelSize = pixelSize or 28
-    zBase     = zBase or 1
+function MakeLogoImage(parent, size, position, anchor, zindex)
+    local ImageLabel = Instance.new("ImageLabel")
+    ImageLabel.Parent = parent
+    ImageLabel.Size = UDim2.new(0, size, 0, size)
+    ImageLabel.Position = position
+    ImageLabel.BackgroundTransparency = 1
+    ImageLabel.Image = LOGO_ASSET_ID
 
-    local Img = Instance.new("ImageLabel", parent)
-    Img.BackgroundTransparency = 1
-    Img.Size        = UDim2.new(0, pixelSize, 0, pixelSize)
-    Img.ZIndex      = zBase
-    Img.Image       = LOGO_ASSET_ID
-    Img.ImageColor3 = Color3.new(1, 1, 1)
-    Img.ScaleType   = Enum.ScaleType.Fit
-    if position    then Img.Position    = position    end
-    if anchorPoint then Img.AnchorPoint = anchorPoint end
-    return Img
+    -- 🔥 ADD THESE LINES HERE
+    ImageLabel.ScaleType = Enum.ScaleType.Crop
+    ImageLabel.ClipsDescendants = true
+
+    if anchor then
+        ImageLabel.AnchorPoint = anchor
+    end
+
+    if zindex then
+        ImageLabel.ZIndex = zindex
+    end
+
+    return ImageLabel
 end
 
 -- ────────────────────────────────────────────────────────────────
@@ -300,7 +307,13 @@ function Vesper:CreateWindow(cfg)
     LogoFrame.Size = UDim2.new(1,0,0,72)
 
     -- [FIX] Custom logo ImageLabel in sidebar (replaces frame-based MakeLogo)
-    MakeLogoImage(LogoFrame, 58, UDim2.new(0, 8, 0.5, -29), nil, 2)
+    MakeLogoImage(
+        LogoFrame,
+        80, -- bigger than container on purpose
+        UDim2.new(0, 4, 0.5, -40),
+        nil,
+        2
+    )
 
     local LogoName = Instance.new("TextLabel", LogoFrame)
     LogoName.BackgroundTransparency = 1
@@ -1415,7 +1428,7 @@ function Vesper:CreateWindow(cfg)
     Bubble.BackgroundColor3 = T.Background
     Bubble.AnchorPoint      = Vector2.new(0,0)
     Bubble.Position         = UDim2.new(0,20,0,20)
-    Bubble.Size             = UDim2.new(0,44,0,44)
+    Bubble.Size             = UDim2.new(0, 60, 0, 60)
     AddCorner(Bubble, 100); AddStroke(Bubble, T.Accent, 2)
 
     local BubbleGlow = Instance.new("ImageLabel", Bubble)
@@ -1428,7 +1441,7 @@ function Vesper:CreateWindow(cfg)
     BubbleGlow.ZIndex = 0
 
     -- [FIX] Custom logo ImageLabel in bubble (replaces frame-based MakeLogo)
-    MakeLogoImage(Bubble, 44, UDim2.new(0.5,0,0.5,0), Vector2.new(0.5,0.5), 2)
+    MakeLogoImage(Bubble, 54, UDim2.new(0.5,0,0.5,0), Vector2.new(0.5,0.5), 2)
 
     -- Transparent click layer on top of everything in the bubble
     local BubbleBtn = Instance.new("TextButton", Bubble)
