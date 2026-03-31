@@ -1,19 +1,21 @@
 -- ================================================================
--- Vesper UI Library — v3.2 (Fully Fixed)
--- FIXES:
---   • T is now a live proxy → theme switching updates ALL colours
---   • Removed duplicate Window declaration (killed RefreshTheme)
---   • RefreshTheme now rebuilds every tracked element
---   • Added missing `return Window` at end of CreateWindow
---   • Logo sizes enlarged and properly centred in both containers
---   • SwitchTab / hover states use live T → correct on theme change
---   • [NEW] Tab Btn/Lbl/Sub/Bar/Ico added to _tracked
---   • [NEW] RefreshTheme iterates Window._tabs → instant colour apply
---   • [NEW] MouseEnter uses T.SidebarHover (was hardcoded RGB)
---   • [NEW] Sidebar logo uses UDim2 scale so it stays centred
---   • [NEW] Bubble logo enlarged to 66 px for proper circle fill
+-- Vesper UI Library — v3.3
+-- FIXES over v3.2:
+--   • Logo zoom-crop: ImageLabel is oversized inside a ClipsDescendants
+--     clip-frame so the visible artwork fills the container instead of
+--     floating in the middle with large transparent margins.
+--   • UIStroke theme tracking: every AddStroke() call for border-coloured
+--     strokes now registers the returned UIStroke in _tracked, so
+--     RefreshTheme updates ALL borders, rows, panels, and inputs when
+--     the theme changes — not just background colours.
 -- ================================================================
 local LOGO_ASSET_ID = "rbxassetid://72372201156015"
+
+-- The logo image asset has built-in transparent padding. The actual
+-- visible artwork occupies roughly 62 % of the canvas. To make it
+-- fill a given pixel container we oversize the ImageLabel by ÷0.62
+-- and clip the parent. Adjust LOGO_FILL if your asset differs.
+local LOGO_FILL = 0.62  -- fraction of canvas that is visible artwork
 
 local CoreGui      = game:GetService("CoreGui")
 local TweenService = game:GetService("TweenService")
@@ -26,15 +28,21 @@ local LP           = Players.LocalPlayer
 -- INTERNAL UTILITIES
 -- ────────────────────────────────────────────────────────────────
 local function TweenPlay(obj, props, t, style, dir)
-    TweenService:Create(obj, TweenInfo.new(t or 0.2, style or Enum.EasingStyle.Quint, dir or Enum.EasingDirection.Out), props):Play()
+    TweenService:Create(obj,
+        TweenInfo.new(t or 0.2, style or Enum.EasingStyle.Quint, dir or Enum.EasingDirection.Out),
+        props):Play()
 end
 local function AddCorner(p, r)
-    local c = Instance.new("UICorner", p); c.CornerRadius = UDim.new(0, r or 6); return c
+    local c = Instance.new("UICorner", p)
+    c.CornerRadius = UDim.new(0, r or 6)
+    return c
 end
 local function AddStroke(p, col, thick, trans)
     local s = Instance.new("UIStroke", p)
-    s.Color = col or Color3.new(1,1,1); s.Thickness = thick or 1; s.Transparency = trans or 0
-    return s
+    s.Color       = col   or Color3.new(1,1,1)
+    s.Thickness   = thick or 1
+    s.Transparency = trans or 0
+    return s   -- always return so callers can track it
 end
 local function AddPad(p, top, bot, left, right)
     local u = Instance.new("UIPadding", p)
@@ -46,28 +54,34 @@ local function AddPad(p, top, bot, left, right)
 end
 local function AddList(p, pad, dir)
     local l = Instance.new("UIListLayout", p)
-    l.Padding              = UDim.new(0, pad or 0)
-    l.FillDirection        = dir or Enum.FillDirection.Vertical
-    l.HorizontalAlignment  = Enum.HorizontalAlignment.Left
-    l.VerticalAlignment    = Enum.VerticalAlignment.Top
-    l.SortOrder            = Enum.SortOrder.LayoutOrder
+    l.Padding             = UDim.new(0, pad or 0)
+    l.FillDirection       = dir or Enum.FillDirection.Vertical
+    l.HorizontalAlignment = Enum.HorizontalAlignment.Left
+    l.VerticalAlignment   = Enum.VerticalAlignment.Top
+    l.SortOrder           = Enum.SortOrder.LayoutOrder
     return l
 end
 local function MakeDraggable(handle, frame)
     local drag, inp, sp, sm = false, nil, nil, nil
     handle.InputBegan:Connect(function(i)
-        if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+        if i.UserInputType == Enum.UserInputType.MouseButton1
+        or i.UserInputType == Enum.UserInputType.Touch then
             drag = true; sp = frame.Position; sm = i.Position
-            i.Changed:Connect(function() if i.UserInputState == Enum.UserInputState.End then drag = false end end)
+            i.Changed:Connect(function()
+                if i.UserInputState == Enum.UserInputState.End then drag = false end
+            end)
         end
     end)
     handle.InputChanged:Connect(function(i)
-        if i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch then inp = i end
+        if i.UserInputType == Enum.UserInputType.MouseMovement
+        or i.UserInputType == Enum.UserInputType.Touch then inp = i end
     end)
     UIS.InputChanged:Connect(function(i)
         if i == inp and drag then
             local d = i.Position - sm
-            TweenPlay(frame, {Position = UDim2.new(sp.X.Scale, sp.X.Offset + d.X, sp.Y.Scale, sp.Y.Offset + d.Y)}, 0.06, Enum.EasingStyle.Linear)
+            TweenPlay(frame, {Position = UDim2.new(
+                sp.X.Scale, sp.X.Offset + d.X,
+                sp.Y.Scale, sp.Y.Offset + d.Y)}, 0.06, Enum.EasingStyle.Linear)
         end
     end)
 end
@@ -87,69 +101,84 @@ local function Ripple(btn, color)
     task.delay(0.5, function() r:Destroy() end)
 end
 
--- ICONS
-local Icons = {}
-pcall(function()
-    Icons = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/src/Icons.lua"))().assets
-end)
-if not Icons or not next(Icons) then
-    Icons = {}
-    setmetatable(Icons, {__index = function() return "rbxassetid://0" end})
-end
-local function Icon(name) return Icons[name] or Icons["lucide-box"] or "" end
-
 -- ────────────────────────────────────────────────────────────────
 -- LOGO BUILDER
+-- Creates a clip-frame of `containerPx` size, then places an
+-- oversized ImageLabel inside so the visible artwork fills the
+-- frame rather than floating with transparent margins.
 -- ────────────────────────────────────────────────────────────────
-local function MakeLogoImage(parent, size, position, anchor, zindex)
-    local img = Instance.new("ImageLabel")
-    img.Parent               = parent
-    img.Size                 = UDim2.new(0, size or 95, 0, size or 95)
-    img.Position             = position or UDim2.new(0.5, 0, 0.5, 0)
+local function MakeLogoClipped(parent, containerPx, position, anchor, zindex)
+    -- Outer clip frame – this is the visible circle/square
+    local clip = Instance.new("Frame", parent)
+    clip.BackgroundTransparency = 1
+    clip.Size                   = UDim2.new(0, containerPx, 0, containerPx)
+    clip.Position               = position or UDim2.new(0.5, 0, 0.5, 0)
+    clip.ClipsDescendants       = true
+    if anchor then clip.AnchorPoint = anchor end
+    if zindex then clip.ZIndex      = zindex end
+
+    -- Oversize the image so the artwork (LOGO_FILL fraction of canvas)
+    -- exactly fills containerPx. Then centre it inside the clip frame.
+    local imgPx = math.ceil(containerPx / LOGO_FILL)
+    local overflow = imgPx - containerPx                   -- total overflow
+    local img = Instance.new("ImageLabel", clip)
     img.BackgroundTransparency = 1
-    img.Image                = LOGO_ASSET_ID
-    img.ScaleType            = Enum.ScaleType.Fit
-    img.ClipsDescendants     = false
-    if anchor  then img.AnchorPoint = anchor end
-    if zindex  then img.ZIndex = zindex end
-    return img
+    img.Size                   = UDim2.new(0, imgPx, 0, imgPx)
+    img.Position               = UDim2.new(0, -overflow / 2, 0, -overflow / 2)
+    img.Image                  = LOGO_ASSET_ID
+    img.ScaleType              = Enum.ScaleType.Fit
+    img.ZIndex                 = (zindex or 1) + 1
+    return clip
 end
+
+-- ────────────────────────────────────────────────────────────────
+-- ICONS
+-- ────────────────────────────────────────────────────────────────
+local Icons = {}
+pcall(function()
+    Icons = loadstring(game:HttpGet(
+        "https://raw.githubusercontent.com/dawid-scripts/Fluent/master/src/Icons.lua"))().assets
+end)
+if not Icons or not next(Icons) then
+    Icons = setmetatable({}, {__index = function() return "rbxassetid://0" end})
+end
+local function Icon(name) return Icons[name] or Icons["lucide-box"] or "" end
 
 -- ────────────────────────────────────────────────────────────────
 -- THEMES
 -- ────────────────────────────────────────────────────────────────
 local Themes = {
     Dark = {
-        Background  = Color3.fromRGB(13,13,17),   Surface     = Color3.fromRGB(20,20,26),
-        SurfaceHigh = Color3.fromRGB(28,28,36),   Sidebar     = Color3.fromRGB(10,10,14),
-        SidebarHover= Color3.fromRGB(30,30,38),   Border      = Color3.fromRGB(38,38,50),
-        BorderHigh  = Color3.fromRGB(55,55,70),   Text        = Color3.fromRGB(240,240,248),
-        SubText     = Color3.fromRGB(130,130,155), Muted      = Color3.fromRGB(70,70,90),
-        Accent      = Color3.fromRGB(139,92,246),  AccentDim  = Color3.fromRGB(100,65,190),
-        Positive    = Color3.fromRGB(52,211,153),  Negative   = Color3.fromRGB(248,113,113),
-        Warning     = Color3.fromRGB(251,191,36),  Track      = Color3.fromRGB(35,35,45),
+        Background  = Color3.fromRGB(13,13,17),    Surface     = Color3.fromRGB(20,20,26),
+        SurfaceHigh = Color3.fromRGB(28,28,36),    Sidebar     = Color3.fromRGB(10,10,14),
+        SidebarHover= Color3.fromRGB(30,30,38),    Border      = Color3.fromRGB(38,38,50),
+        BorderHigh  = Color3.fromRGB(55,55,70),    Text        = Color3.fromRGB(240,240,248),
+        SubText     = Color3.fromRGB(130,130,155), Muted       = Color3.fromRGB(70,70,90),
+        Accent      = Color3.fromRGB(139,92,246),  AccentDim   = Color3.fromRGB(100,65,190),
+        Positive    = Color3.fromRGB(52,211,153),  Negative    = Color3.fromRGB(248,113,113),
+        Warning     = Color3.fromRGB(251,191,36),  Track       = Color3.fromRGB(35,35,45),
         InputBg     = Color3.fromRGB(16,16,22),
     },
     Midnight = {
-        Background  = Color3.fromRGB(7,7,18),     Surface     = Color3.fromRGB(12,12,28),
-        SurfaceHigh = Color3.fromRGB(19,18,42),   Sidebar     = Color3.fromRGB(5,5,14),
-        SidebarHover= Color3.fromRGB(22,20,50),   Border      = Color3.fromRGB(32,28,72),
-        BorderHigh  = Color3.fromRGB(56,48,120),  Text        = Color3.fromRGB(232,228,255),
-        SubText     = Color3.fromRGB(118,112,182), Muted      = Color3.fromRGB(60,56,104),
-        Accent      = Color3.fromRGB(132,98,255),  AccentDim  = Color3.fromRGB(92,64,195),
-        Positive    = Color3.fromRGB(52,211,153),  Negative   = Color3.fromRGB(248,113,113),
-        Warning     = Color3.fromRGB(251,191,36),  Track      = Color3.fromRGB(18,16,46),
+        Background  = Color3.fromRGB(7,7,18),      Surface     = Color3.fromRGB(12,12,28),
+        SurfaceHigh = Color3.fromRGB(19,18,42),    Sidebar     = Color3.fromRGB(5,5,14),
+        SidebarHover= Color3.fromRGB(22,20,50),    Border      = Color3.fromRGB(32,28,72),
+        BorderHigh  = Color3.fromRGB(56,48,120),   Text        = Color3.fromRGB(232,228,255),
+        SubText     = Color3.fromRGB(118,112,182), Muted       = Color3.fromRGB(60,56,104),
+        Accent      = Color3.fromRGB(132,98,255),  AccentDim   = Color3.fromRGB(92,64,195),
+        Positive    = Color3.fromRGB(52,211,153),  Negative    = Color3.fromRGB(248,113,113),
+        Warning     = Color3.fromRGB(251,191,36),  Track       = Color3.fromRGB(18,16,46),
         InputBg     = Color3.fromRGB(9,8,22),
     },
     Ember = {
-        Background  = Color3.fromRGB(15,10,10),   Surface     = Color3.fromRGB(24,16,15),
-        SurfaceHigh = Color3.fromRGB(33,22,20),   Sidebar     = Color3.fromRGB(11,7,7),
-        SidebarHover= Color3.fromRGB(38,26,24),   Border      = Color3.fromRGB(55,32,30),
-        BorderHigh  = Color3.fromRGB(80,48,44),   Text        = Color3.fromRGB(248,240,235),
-        SubText     = Color3.fromRGB(160,120,112), Muted      = Color3.fromRGB(90,60,55),
-        Accent      = Color3.fromRGB(251,146,60),  AccentDim  = Color3.fromRGB(194,100,35),
-        Positive    = Color3.fromRGB(52,211,153),  Negative   = Color3.fromRGB(248,113,113),
-        Warning     = Color3.fromRGB(251,191,36),  Track      = Color3.fromRGB(38,22,20),
+        Background  = Color3.fromRGB(15,10,10),    Surface     = Color3.fromRGB(24,16,15),
+        SurfaceHigh = Color3.fromRGB(33,22,20),    Sidebar     = Color3.fromRGB(11,7,7),
+        SidebarHover= Color3.fromRGB(38,26,24),    Border      = Color3.fromRGB(55,32,30),
+        BorderHigh  = Color3.fromRGB(80,48,44),    Text        = Color3.fromRGB(248,240,235),
+        SubText     = Color3.fromRGB(160,120,112), Muted       = Color3.fromRGB(90,60,55),
+        Accent      = Color3.fromRGB(251,146,60),  AccentDim   = Color3.fromRGB(194,100,35),
+        Positive    = Color3.fromRGB(52,211,153),  Negative    = Color3.fromRGB(248,113,113),
+        Warning     = Color3.fromRGB(251,191,36),  Track       = Color3.fromRGB(38,22,20),
         InputBg     = Color3.fromRGB(14,9,8),
     },
 }
@@ -158,7 +187,7 @@ local Themes = {
 -- LIBRARY
 -- ────────────────────────────────────────────────────────────────
 local Vesper = {
-    Version = "3.2",
+    Version = "3.3",
     Themes  = Themes,
     Theme   = Themes.Midnight,
     Options = {},
@@ -176,7 +205,7 @@ end
 --  CREATE WINDOW
 -- ════════════════════════════════════════════════════════════════
 function Vesper:CreateWindow(cfg)
-    -- Live proxy: every T.X read always reflects Vesper.Theme.X
+    -- Live proxy: every T.X read always returns Vesper.Theme.X
     local T = setmetatable({}, {
         __index    = function(_, k) return Vesper.Theme[k] end,
         __newindex = function() end,
@@ -188,7 +217,6 @@ function Vesper:CreateWindow(cfg)
     local hotkey       = cfg.MinimizeKey or Enum.KeyCode.RightControl
     local tag          = cfg.Tag         or "v" .. self.Version
 
-    -- Cleanup old instances
     local gui_parent = (pcall(function() return gethui() end) and gethui()) or CoreGui
     if not gui_parent then gui_parent = LP:WaitForChild("PlayerGui") end
     for _, v in pairs(gui_parent:GetChildren()) do
@@ -196,13 +224,12 @@ function Vesper:CreateWindow(cfg)
     end
 
     local Screen = Instance.new("ScreenGui")
-    Screen.Name          = "VesperUI"
-    Screen.Parent        = gui_parent
-    Screen.ResetOnSpawn  = false
-    Screen.DisplayOrder  = 999
+    Screen.Name           = "VesperUI"
+    Screen.Parent         = gui_parent
+    Screen.ResetOnSpawn   = false
+    Screen.DisplayOrder   = 999
     Screen.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
-    -- Notification holder
     local NotifHolder = Instance.new("Frame", Screen)
     NotifHolder.BackgroundTransparency = 1
     NotifHolder.AnchorPoint = Vector2.new(1, 1)
@@ -211,30 +238,28 @@ function Vesper:CreateWindow(cfg)
     local NLayout = AddList(NotifHolder, 8)
     NLayout.VerticalAlignment = Enum.VerticalAlignment.Bottom
 
-    -- Main window frame
     local Main = Instance.new("Frame", Screen)
-    Main.Name                = "Main"
-    Main.BackgroundColor3    = T.Background
-    Main.AnchorPoint         = Vector2.new(0.5, 0.5)
-    Main.Position            = UDim2.new(0.5, 0, 0.5, 0)
-    Main.Size                = UDim2.new(0, 730, 0, 520)
-    Main.ClipsDescendants    = false
-    Main.Visible             = false
-    local MainCorner         = AddCorner(Main, 10)
-    local MainStroke         = AddStroke(Main, T.Border, 1.5)
+    Main.Name             = "Main"
+    Main.BackgroundColor3 = T.Background
+    Main.AnchorPoint      = Vector2.new(0.5, 0.5)
+    Main.Position         = UDim2.new(0.5, 0, 0.5, 0)
+    Main.Size             = UDim2.new(0, 730, 0, 520)
+    Main.ClipsDescendants = false
+    Main.Visible          = false
+    local MainCorner      = AddCorner(Main, 10)
+    local MainStroke      = AddStroke(Main, T.Border, 1.5)
 
     local WinGlow = Instance.new("ImageLabel", Main)
     WinGlow.BackgroundTransparency = 1
-    WinGlow.Position           = UDim2.new(0, -40, 0, -40)
-    WinGlow.Size               = UDim2.new(1, 80, 1, 80)
-    WinGlow.Image              = "rbxassetid://4996891970"
-    WinGlow.ImageColor3        = T.Accent
-    WinGlow.ImageTransparency  = 0.82
-    WinGlow.ZIndex             = 0
+    WinGlow.Position          = UDim2.new(0, -40, 0, -40)
+    WinGlow.Size              = UDim2.new(1, 80, 1, 80)
+    WinGlow.Image             = "rbxassetid://4996891970"
+    WinGlow.ImageColor3       = T.Accent
+    WinGlow.ImageTransparency = 0.82
+    WinGlow.ZIndex            = 0
 
     local WinScale = Instance.new("UIScale", Main); WinScale.Scale = 0
 
-    -- Sidebar
     local Sidebar = Instance.new("Frame", Main)
     Sidebar.BackgroundColor3 = T.Sidebar
     Sidebar.Size             = UDim2.new(0, 190, 1, 0)
@@ -254,6 +279,7 @@ function Vesper:CreateWindow(cfg)
     SideLine.Size             = UDim2.new(0, 1, 1, 0)
     SideLine.BorderSizePixel  = 0
 
+    -- Single Window declaration
     local Window       = {}
     Window._active     = nil
     Window._tabs       = {}
@@ -261,30 +287,30 @@ function Vesper:CreateWindow(cfg)
     Window.Sidebar     = Sidebar
     Vesper._window     = Window
 
-    local _tracked = {}  -- { obj, prop, themeKey }
+    -- ── Theme tracking registry ───────────────────────────────────
+    -- TC  : register a BackgroundColor3 / TextColor3 / ImageColor3 / etc.
+    -- TCS : register a UIStroke.Color — called after every AddStroke
+    --       that uses a theme colour, so strokes update on theme switch.
+    local _tracked = {}
 
     local function TC(obj, prop, themeKey)
         obj[prop] = Vesper.Theme[themeKey]
         table.insert(_tracked, { obj = obj, prop = prop, key = themeKey })
     end
+    local function TCS(stroke, themeKey)   -- track a UIStroke.Color
+        stroke.Color = Vesper.Theme[themeKey]
+        table.insert(_tracked, { obj = stroke, prop = "Color", key = themeKey })
+    end
 
-    -- ────────────────────────────────────────────────────────────
-    -- FIX: RefreshTheme now also iterates Window._tabs to update
-    -- tab buttons, bars, labels, and icons immediately — no hover
-    -- required. Active tab gets SidebarHover; others get Sidebar.
-    -- ────────────────────────────────────────────────────────────
+    -- ── RefreshTheme ──────────────────────────────────────────────
     function Window:RefreshTheme()
-        -- 1. Sweep every registered element
         for _, item in ipairs(_tracked) do
             if item.obj and item.obj.Parent then
                 item.obj[item.prop] = Vesper.Theme[item.key]
             end
         end
-        -- 2. Stroke on Main
         MainStroke.Color = Vesper.Theme.Border
-        -- 3. Window ambient glow
         if WinGlow then WinGlow.ImageColor3 = Vesper.Theme.Accent end
-        -- 4. Update every tab button/bar/label/icon directly
         for _, tab in ipairs(Window._tabs) do
             if tab._btn and tab._btn.Parent then
                 local isActive = (Window._active == tab)
@@ -293,42 +319,49 @@ function Vesper:CreateWindow(cfg)
                 tab._lbl.TextColor3       = isActive and Vesper.Theme.Text    or Vesper.Theme.SubText
                 tab._sub.TextColor3       = isActive and Vesper.Theme.SubText or Vesper.Theme.Muted
             end
-            -- refresh icon colour if present
             if tab._ico and tab._ico.Parent then
+                local isActive = (Window._active == tab)
                 tab._ico.ImageColor3 = isActive and Vesper.Theme.Accent or Vesper.Theme.Muted
             end
         end
     end
 
-    -- Apply initial colours
+    -- Initial colours
     TC(Main,     "BackgroundColor3", "Background")
     TC(Sidebar,  "BackgroundColor3", "Sidebar")
     TC(SideFlat, "BackgroundColor3", "Sidebar")
     TC(SideLine, "BackgroundColor3", "Border")
 
-    -- ── Logo (sidebar) ───────────────────────────────────────────
-    -- FIX: LogoFrame split into two sub-frames so the logo and the
-    -- text are each independently centred, with no hard pixel math
-    -- that breaks at different sidebar widths.
+    -- ── Sidebar logo ──────────────────────────────────────────────
+    -- LogoFrame is 130 px tall. It contains two cells side-by-side:
+    -- a 100 px left cell (clip-zoomed logo) and a right text cell.
     local LogoFrame = Instance.new("Frame", Sidebar)
     LogoFrame.BackgroundTransparency = 1
     LogoFrame.Size                   = UDim2.new(1, 0, 0, 130)
 
-    -- Left cell: logo centred in a 100 px wide area
+    -- Left cell: 100 px wide, clips the oversized logo image
     local LogoCell = Instance.new("Frame", LogoFrame)
     LogoCell.BackgroundTransparency = 1
     LogoCell.Position               = UDim2.new(0, 0, 0, 0)
     LogoCell.Size                   = UDim2.new(0, 100, 1, 0)
+    LogoCell.ClipsDescendants       = true
 
-    MakeLogoImage(
-        LogoCell,
-        86,                               -- size: fills the 100 px cell nicely
-        UDim2.new(0.5, 0, 0.5, 0),       -- dead-centre of the cell
-        Vector2.new(0.5, 0.5),           -- anchor at image centre
-        2
-    )
+    -- Oversize the image so the visible artwork fills the 100 px cell
+    do
+        local cellPx  = 100
+        local imgPx   = math.ceil(cellPx / LOGO_FILL)   -- ≈ 162 px
+        local overflow = imgPx - cellPx
+        local img = Instance.new("ImageLabel", LogoCell)
+        img.BackgroundTransparency = 1
+        img.Size                   = UDim2.new(0, imgPx, 0, imgPx)
+        -- centre it inside the cell (negative offset on both axes)
+        img.Position               = UDim2.new(0, -overflow / 2, 0.5, -imgPx / 2)
+        img.Image                  = LOGO_ASSET_ID
+        img.ScaleType              = Enum.ScaleType.Fit
+        img.ZIndex                 = 2
+    end
 
-    -- Right cell: title + tag stacked vertically, centred
+    -- Right cell: title + tag
     local TextCell = Instance.new("Frame", LogoFrame)
     TextCell.BackgroundTransparency = 1
     TextCell.Position               = UDim2.new(0, 104, 0, 0)
@@ -376,7 +409,7 @@ function Vesper:CreateWindow(cfg)
     local TabListLayout = AddList(TabList, 2)
     TabListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 
-    -- ── Header (title bar, right side) ───────────────────────────
+    -- ── Header ────────────────────────────────────────────────────
     local Header = Instance.new("Frame", Main)
     Header.BackgroundTransparency = 1
     Header.Position               = UDim2.new(0, 190, 0, 0)
@@ -385,14 +418,14 @@ function Vesper:CreateWindow(cfg)
 
     local TitleLabel = Instance.new("TextLabel", Header)
     TitleLabel.BackgroundTransparency = 1
-    TitleLabel.Position         = UDim2.new(0, 16, 0, 10)
-    TitleLabel.Size             = UDim2.new(0.65, 0, 0, 18)
-    TitleLabel.Font             = Enum.Font.GothamBold
-    TitleLabel.Text             = titleText
-    TitleLabel.RichText         = true
-    TitleLabel.TextColor3       = T.Text
-    TitleLabel.TextSize         = 16
-    TitleLabel.TextXAlignment   = Enum.TextXAlignment.Left
+    TitleLabel.Position       = UDim2.new(0, 16, 0, 10)
+    TitleLabel.Size           = UDim2.new(0.65, 0, 0, 18)
+    TitleLabel.Font           = Enum.Font.GothamBold
+    TitleLabel.Text           = titleText
+    TitleLabel.RichText       = true
+    TitleLabel.TextColor3     = T.Text
+    TitleLabel.TextSize       = 16
+    TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
     TC(TitleLabel, "TextColor3", "Text")
 
     local SubLabel = Instance.new("TextLabel", Header)
@@ -415,7 +448,6 @@ function Vesper:CreateWindow(cfg)
         end)
     end
 
-    -- macOS-style window control dots
     local function MakeDot(color, xOff)
         local dot = Instance.new("TextButton", Header)
         dot.BackgroundColor3 = color
@@ -425,14 +457,13 @@ function Vesper:CreateWindow(cfg)
         dot.Text             = ""; dot.AutoButtonColor = false
         AddCorner(dot, 100)
         local dim = Color3.new(color.R * .6, color.G * .6, color.B * .6)
-        dot.MouseEnter:Connect(function() TweenPlay(dot, {BackgroundColor3 = color},  0.1) end)
+        dot.MouseEnter:Connect(function() TweenPlay(dot, {BackgroundColor3 = color},  0.1)  end)
         dot.MouseLeave:Connect(function() TweenPlay(dot, {BackgroundColor3 = dim},   0.12) end)
         TweenPlay(dot, {BackgroundColor3 = dim}, 0)
         return dot
     end
     local CloseBtn    = MakeDot(T.Negative, 14)
     local MinimizeBtn = MakeDot(T.Warning,  32)
-
     table.insert(_tracked, { obj = CloseBtn,    prop = "BackgroundColor3", key = "Negative" })
     table.insert(_tracked, { obj = MinimizeBtn, prop = "BackgroundColor3", key = "Warning"  })
 
@@ -443,7 +474,6 @@ function Vesper:CreateWindow(cfg)
     HDivider.BorderSizePixel  = 0
     TC(HDivider, "BackgroundColor3", "Border")
 
-    -- ── Content area ──────────────────────────────────────────────
     local ContentArea = Instance.new("Frame", Main)
     ContentArea.BackgroundTransparency = 1
     ContentArea.Position              = UDim2.new(0, 190, 0, 52)
@@ -457,20 +487,22 @@ function Vesper:CreateWindow(cfg)
         if Window._active == tab then return end
         if Window._active then
             local old = Window._active
-            TweenPlay(old._btn, {BackgroundColor3 = T.Sidebar},  0.18)
-            TweenPlay(old._bar, {BackgroundTransparency = 1, Size = UDim2.new(0, 2, 0.5, 0)}, 0.18)
+            TweenPlay(old._btn, {BackgroundColor3 = T.Sidebar}, 0.18)
+            TweenPlay(old._bar, {BackgroundTransparency = 1,
+                Size = UDim2.new(0, 2, 0.5, 0)}, 0.18)
             old._lbl.TextColor3 = T.SubText
             old._sub.TextColor3 = T.Muted
             if old._ico then old._ico.ImageColor3 = T.Muted end
-            old._page.Visible   = false
+            old._page.Visible = false
         end
         Window._active = tab
         TweenPlay(tab._btn, {BackgroundColor3 = T.SidebarHover}, 0.18)
-        TweenPlay(tab._bar, {BackgroundTransparency = 0, Size = UDim2.new(0, 3, 0.65, 0)}, 0.22, Enum.EasingStyle.Back)
+        TweenPlay(tab._bar, {BackgroundTransparency = 0,
+            Size = UDim2.new(0, 3, 0.65, 0)}, 0.22, Enum.EasingStyle.Back)
         tab._lbl.TextColor3 = T.Text
         tab._sub.TextColor3 = T.SubText
         if tab._ico then tab._ico.ImageColor3 = T.Accent end
-        tab._page.Visible   = true
+        tab._page.Visible = true
     end
 
     -- ════════════════════════════════════════════════════════════
@@ -489,8 +521,6 @@ function Vesper:CreateWindow(cfg)
         Btn.ClipsDescendants = false
         AddCorner(Btn, 7)
 
-        -- FIX: use T.SidebarHover instead of the hardcoded RGB value
-        -- so hover colour always matches the current theme immediately.
         Btn.MouseEnter:Connect(function()
             if Window._active and Window._active._btn == Btn then return end
             TweenPlay(Btn, {BackgroundColor3 = T.SidebarHover}, 0.12)
@@ -508,7 +538,7 @@ function Vesper:CreateWindow(cfg)
         Bar.Size                 = UDim2.new(0, 2, 0.5, 0)
         AddCorner(Bar, 4)
 
-        local xOff = tabIcon and 34 or 10
+        local xOff   = tabIcon and 34 or 10
         local IcoRef = nil
         if tabIcon then
             local Ico = Instance.new("ImageLabel", Btn)
@@ -523,8 +553,7 @@ function Vesper:CreateWindow(cfg)
 
         local Lbl = Instance.new("TextLabel", Btn)
         Lbl.BackgroundTransparency = 1
-        local yLbl = (tabSub ~= "") and 8 or 15
-        Lbl.Position       = UDim2.new(0, xOff, 0, yLbl)
+        Lbl.Position       = UDim2.new(0, xOff, 0, (tabSub ~= "") and 8 or 15)
         Lbl.Size           = UDim2.new(1, -xOff - 4, 0, 18)
         Lbl.Font           = Enum.Font.GothamBold
         Lbl.Text           = tabName
@@ -566,10 +595,10 @@ function Vesper:CreateWindow(cfg)
         ColHolder.Size          = UDim2.new(1, 0, 0, 0)
         ColHolder.AutomaticSize = Enum.AutomaticSize.Y
         local ColList = Instance.new("UIListLayout", ColHolder)
-        ColList.FillDirection      = Enum.FillDirection.Horizontal
-        ColList.Padding            = UDim.new(0, 8)
-        ColList.VerticalAlignment  = Enum.VerticalAlignment.Top
-        ColList.SortOrder          = Enum.SortOrder.LayoutOrder
+        ColList.FillDirection     = Enum.FillDirection.Horizontal
+        ColList.Padding           = UDim.new(0, 8)
+        ColList.VerticalAlignment = Enum.VerticalAlignment.Top
+        ColList.SortOrder         = Enum.SortOrder.LayoutOrder
 
         local LeftCol = Instance.new("Frame", ColHolder)
         LeftCol.BackgroundTransparency = 1
@@ -588,10 +617,10 @@ function Vesper:CreateWindow(cfg)
         end)
 
         local tabObj = {
-            _btn  = Btn,   _bar  = Bar,
-            _lbl  = Lbl,   _sub  = Sub,
-            _ico  = IcoRef,          -- FIX: store icon reference for RefreshTheme
-            _page = Page,  _left = LeftCol,
+            _btn   = Btn,   _bar   = Bar,
+            _lbl   = Lbl,   _sub   = Sub,
+            _ico   = IcoRef,
+            _page  = Page,  _left  = LeftCol,
             _right = RightCol, _col = true,
         }
         Btn.MouseButton1Click:Connect(function() SwitchTab(tabObj) end)
@@ -603,10 +632,10 @@ function Vesper:CreateWindow(cfg)
 
         function TabAPI:CreateSection(cfg2)
             local secName = type(cfg2) == "string" and cfg2 or (cfg2.Title or cfg2[1] or "Section")
-            local secIcon = type(cfg2) == "table"  and (cfg2.Icon) or nil
+            local secIcon = type(cfg2) == "table"  and cfg2.Icon or nil
 
-            local col = tabObj._col and tabObj._left or tabObj._right
-            tabObj._col = not tabObj._col
+            local col    = tabObj._col and tabObj._left or tabObj._right
+            tabObj._col  = not tabObj._col
 
             local SBase = Instance.new("Frame", col)
             SBase.BackgroundColor3 = T.Surface
@@ -614,7 +643,8 @@ function Vesper:CreateWindow(cfg)
             SBase.Size             = UDim2.new(1, 0, 0, 42)
             SBase.AutomaticSize    = Enum.AutomaticSize.Y
             AddCorner(SBase, 8)
-            AddStroke(SBase, T.Border, 1)
+            -- ▼ FIX: track the section border stroke
+            TCS(AddStroke(SBase, T.Border, 1), "Border")
             TC(SBase, "BackgroundColor3", "Surface")
 
             local TopLine = Instance.new("Frame", SBase)
@@ -668,23 +698,23 @@ function Vesper:CreateWindow(cfg)
 
             local SecAPI = {}
 
+            -- ▼ FIX: MakeRow now tracks its border stroke
             local function MakeRow(height)
                 local row = Instance.new("Frame", EBox)
                 row.BackgroundColor3 = T.SurfaceHigh
                 row.BorderSizePixel  = 0
                 row.Size             = UDim2.new(1, 0, 0, height or 32)
                 AddCorner(row, 6)
-                AddStroke(row, T.Border, 1)
+                TCS(AddStroke(row, T.Border, 1), "Border")
                 TC(row, "BackgroundColor3", "SurfaceHigh")
                 return row
             end
 
             local function MakeTitle(parent, title, desc, xOff4)
                 xOff4 = xOff4 or 10
-                local yTitle = 7
                 local tl = Instance.new("TextLabel", parent)
                 tl.BackgroundTransparency = 1
-                tl.Position       = UDim2.new(0, xOff4, 0, yTitle)
+                tl.Position       = UDim2.new(0, xOff4, 0, 7)
                 tl.Size           = UDim2.new(1, -80, 0, 18)
                 tl.Font           = Enum.Font.GothamBold
                 tl.Text           = title
@@ -709,119 +739,92 @@ function Vesper:CreateWindow(cfg)
                 return tl
             end
 
-            -- ── CreateLabel ──────────────────────────────────────
+            -- CreateLabel
             function SecAPI:CreateLabel(cfg3)
-                local text = type(cfg3) == "string" and cfg3 or (cfg3.Title   or cfg3[1] or "")
+                local text = type(cfg3) == "string" and cfg3 or (cfg3.Title or cfg3[1] or "")
                 local body = type(cfg3) == "table"  and cfg3.Content or nil
                 local F = Instance.new("Frame", EBox)
                 F.BackgroundTransparency = 1
-                F.Size          = UDim2.new(1, 0, 0, 0)
-                F.AutomaticSize = Enum.AutomaticSize.Y
+                F.Size = UDim2.new(1, 0, 0, 0); F.AutomaticSize = Enum.AutomaticSize.Y
                 local L = Instance.new("TextLabel", F)
                 L.BackgroundTransparency = 1
-                L.Size           = UDim2.new(1, 0, 0, 0)
-                L.AutomaticSize  = Enum.AutomaticSize.Y
-                L.Font           = Enum.Font.Gotham
-                L.Text           = body and ("<b>" .. text .. "</b>\n" .. body) or text
-                L.RichText       = true
-                L.TextColor3     = T.SubText
-                L.TextSize       = 12
-                L.TextXAlignment = Enum.TextXAlignment.Left
-                L.TextWrapped    = true
+                L.Size = UDim2.new(1, 0, 0, 0); L.AutomaticSize = Enum.AutomaticSize.Y
+                L.Font = Enum.Font.Gotham
+                L.Text = body and ("<b>" .. text .. "</b>\n" .. body) or text
+                L.RichText = true; L.TextColor3 = T.SubText; L.TextSize = 12
+                L.TextXAlignment = Enum.TextXAlignment.Left; L.TextWrapped = true
                 TC(L, "TextColor3", "SubText")
                 local api = {}
                 function api:SetValue(t) L.Text = t end
                 return api
             end
 
-            -- ── CreateParagraph ──────────────────────────────────
+            -- CreateParagraph
             function SecAPI:CreateParagraph(cfg3)
                 local title = type(cfg3) == "string" and cfg3 or (cfg3.Title or cfg3[1] or "")
                 local body  = type(cfg3) == "table"  and (cfg3.Content or cfg3[2] or "") or ""
                 local F = Instance.new("Frame", EBox)
-                F.BackgroundColor3 = T.SurfaceHigh
-                F.BorderSizePixel  = 0
-                F.Size             = UDim2.new(1, 0, 0, 0)
-                F.AutomaticSize    = Enum.AutomaticSize.Y
+                F.BackgroundColor3 = T.SurfaceHigh; F.BorderSizePixel = 0
+                F.Size = UDim2.new(1, 0, 0, 0); F.AutomaticSize = Enum.AutomaticSize.Y
                 AddCorner(F, 5); AddPad(F, 8, 8, 10, 10); AddList(F, 4)
                 TC(F, "BackgroundColor3", "SurfaceHigh")
                 local TL = Instance.new("TextLabel", F)
-                TL.BackgroundTransparency = 1
-                TL.Size           = UDim2.new(1, 0, 0, 16)
-                TL.Font           = Enum.Font.GothamBold
-                TL.Text           = title
-                TL.TextColor3     = T.Text
-                TL.TextSize       = 12
+                TL.BackgroundTransparency = 1; TL.Size = UDim2.new(1, 0, 0, 16)
+                TL.Font = Enum.Font.GothamBold; TL.Text = title
+                TL.TextColor3 = T.Text; TL.TextSize = 12
                 TL.TextXAlignment = Enum.TextXAlignment.Left
                 TC(TL, "TextColor3", "Text")
                 local BL = Instance.new("TextLabel", F)
                 BL.BackgroundTransparency = 1
-                BL.Size           = UDim2.new(1, 0, 0, 0)
-                BL.AutomaticSize  = Enum.AutomaticSize.Y
-                BL.Font           = Enum.Font.Gotham
-                BL.Text           = body
-                BL.TextColor3     = T.SubText
-                BL.TextSize       = 11
-                BL.TextXAlignment = Enum.TextXAlignment.Left
-                BL.TextWrapped    = true
+                BL.Size = UDim2.new(1, 0, 0, 0); BL.AutomaticSize = Enum.AutomaticSize.Y
+                BL.Font = Enum.Font.Gotham; BL.Text = body
+                BL.TextColor3 = T.SubText; BL.TextSize = 11
+                BL.TextXAlignment = Enum.TextXAlignment.Left; BL.TextWrapped = true
                 TC(BL, "TextColor3", "SubText")
                 local api = {}
                 function api:SetValue(t, b) TL.Text = t or TL.Text; BL.Text = b or BL.Text end
                 return api
             end
 
-            -- ── CreateSeparator ──────────────────────────────────
+            -- CreateSeparator
             function SecAPI:CreateSeparator(cfg3)
-                local label = type(cfg3) == "string" and cfg3 or (type(cfg3) == "table" and cfg3.Title) or nil
+                local label = type(cfg3) == "string" and cfg3
+                    or (type(cfg3) == "table" and cfg3.Title) or nil
                 local F = Instance.new("Frame", EBox)
                 F.BackgroundTransparency = 1
                 F.Size = UDim2.new(1, 0, 0, label and 18 or 6)
                 if label then
                     local L = Instance.new("TextLabel", F)
-                    L.BackgroundTransparency = 1
-                    L.Size           = UDim2.new(1, 0, 0, 12)
-                    L.Font           = Enum.Font.GothamBold
-                    L.Text           = label:upper()
-                    L.TextColor3     = T.Muted
-                    L.TextSize       = 9
-                    L.TextXAlignment = Enum.TextXAlignment.Left
-                    L.TextTransparency = 0.3
+                    L.BackgroundTransparency = 1; L.Size = UDim2.new(1, 0, 0, 12)
+                    L.Font = Enum.Font.GothamBold; L.Text = label:upper()
+                    L.TextColor3 = T.Muted; L.TextSize = 9
+                    L.TextXAlignment = Enum.TextXAlignment.Left; L.TextTransparency = 0.3
                     TC(L, "TextColor3", "Muted")
                 end
                 local Line = Instance.new("Frame", F)
-                Line.BackgroundColor3 = T.Border
-                Line.AnchorPoint      = Vector2.new(0, 1)
-                Line.Position         = UDim2.new(0, 0, 1, 0)
-                Line.Size             = UDim2.new(1, 0, 0, 1)
-                Line.BorderSizePixel  = 0
+                Line.BackgroundColor3 = T.Border; Line.AnchorPoint = Vector2.new(0, 1)
+                Line.Position = UDim2.new(0, 0, 1, 0); Line.Size = UDim2.new(1, 0, 0, 1)
+                Line.BorderSizePixel = 0
                 TC(Line, "BackgroundColor3", "Border")
             end
 
-            -- ── CreateDynamicLabel ───────────────────────────────
+            -- CreateDynamicLabel
             function SecAPI:CreateDynamicLabel(cfg3)
                 local name  = type(cfg3) == "string" and cfg3 or (cfg3.Title or cfg3[1] or "Label")
                 local value = type(cfg3) == "table"  and (cfg3.Value or cfg3[2] or "—") or "—"
                 local color = type(cfg3) == "table"  and cfg3.Color or nil
                 local F = Instance.new("Frame", EBox)
-                F.BackgroundTransparency = 1
-                F.Size = UDim2.new(1, 0, 0, 18)
+                F.BackgroundTransparency = 1; F.Size = UDim2.new(1, 0, 0, 18)
                 local NL = Instance.new("TextLabel", F)
-                NL.BackgroundTransparency = 1
-                NL.Size           = UDim2.new(0.55, 0, 1, 0)
-                NL.Font           = Enum.Font.Gotham
-                NL.Text           = name
-                NL.TextColor3     = T.SubText
-                NL.TextSize       = 12
+                NL.BackgroundTransparency = 1; NL.Size = UDim2.new(0.55, 0, 1, 0)
+                NL.Font = Enum.Font.Gotham; NL.Text = name
+                NL.TextColor3 = T.SubText; NL.TextSize = 12
                 NL.TextXAlignment = Enum.TextXAlignment.Left
                 TC(NL, "TextColor3", "SubText")
                 local VL = Instance.new("TextLabel", F)
-                VL.BackgroundTransparency = 1
-                VL.Position       = UDim2.new(0.55, 0, 0, 0)
-                VL.Size           = UDim2.new(0.45, 0, 1, 0)
-                VL.Font           = Enum.Font.GothamBold
-                VL.Text           = tostring(value)
-                VL.TextColor3     = color or T.Accent
-                VL.TextSize       = 12
+                VL.BackgroundTransparency = 1; VL.Position = UDim2.new(0.55, 0, 0, 0)
+                VL.Size = UDim2.new(0.45, 0, 1, 0); VL.Font = Enum.Font.GothamBold
+                VL.Text = tostring(value); VL.TextColor3 = color or T.Accent; VL.TextSize = 12
                 VL.TextXAlignment = Enum.TextXAlignment.Right
                 if not color then TC(VL, "TextColor3", "Accent") end
                 local api = {}
@@ -833,27 +836,22 @@ function Vesper:CreateWindow(cfg)
                 return api
             end
 
-            -- ── CreateButton ─────────────────────────────────────
+            -- CreateButton
             function SecAPI:CreateButton(cfg3)
-                local title  = cfg3.Title       or cfg3[1] or "Button"
+                local title  = cfg3.Title or cfg3[1] or "Button"
                 local desc   = cfg3.Description or cfg3.Desc or cfg3[2] or nil
-                local cb     = cfg3.Callback    or function() end
+                local cb     = cfg3.Callback or function() end
                 local height = desc and 44 or 32
-                local row    = MakeRow(height)
-                row.ClipsDescendants = true
+                local row    = MakeRow(height); row.ClipsDescendants = true
                 MakeTitle(row, title, desc)
                 local Arrow = Instance.new("ImageLabel", row)
-                Arrow.BackgroundTransparency = 1
-                Arrow.AnchorPoint  = Vector2.new(1, 0.5)
-                Arrow.Position     = UDim2.new(1, -10, 0.5, 0)
-                Arrow.Size         = UDim2.new(0, 14, 0, 14)
-                Arrow.Image        = Icon("lucide-chevron-right")
-                Arrow.ImageColor3  = T.Muted
+                Arrow.BackgroundTransparency = 1; Arrow.AnchorPoint = Vector2.new(1, 0.5)
+                Arrow.Position = UDim2.new(1, -10, 0.5, 0); Arrow.Size = UDim2.new(0, 14, 0, 14)
+                Arrow.Image = Icon("lucide-chevron-right"); Arrow.ImageColor3 = T.Muted
                 TC(Arrow, "ImageColor3", "Muted")
                 local clickable = Instance.new("TextButton", row)
-                clickable.BackgroundTransparency = 1
-                clickable.Size   = UDim2.new(1, 0, 1, 0)
-                clickable.Text   = ""; clickable.ZIndex = row.ZIndex + 1
+                clickable.BackgroundTransparency = 1; clickable.Size = UDim2.new(1, 0, 1, 0)
+                clickable.Text = ""; clickable.ZIndex = row.ZIndex + 1
                 clickable.MouseEnter:Connect(function()
                     TweenPlay(row,   {BackgroundColor3 = T.BorderHigh}, 0.12)
                     TweenPlay(Arrow, {ImageColor3      = T.Accent},     0.12)
@@ -873,58 +871,45 @@ function Vesper:CreateWindow(cfg)
                 return api
             end
 
-            -- ── CreateToggle ─────────────────────────────────────
+            -- CreateToggle
             function SecAPI:CreateToggle(key, cfg3)
                 if type(key) == "table" then cfg3 = key; key = nil end
                 cfg3 = cfg3 or {}
-                local title   = cfg3.Title       or cfg3[1] or "Toggle"
+                local title   = cfg3.Title or cfg3[1] or "Toggle"
                 local desc    = cfg3.Description or cfg3.Desc or cfg3[2] or nil
                 local default = cfg3.Default ~= nil and cfg3.Default or false
-                local cb      = cfg3.Callback    or function() end
+                local cb      = cfg3.Callback or function() end
                 local toggled = default
-                local height  = desc and 44 or 32
-                local row     = MakeRow(height)
+                local row     = MakeRow(desc and 44 or 32)
                 MakeTitle(row, title, desc, 10)
-
                 local Track = Instance.new("Frame", row)
                 Track.AnchorPoint      = Vector2.new(1, 0.5)
                 Track.Position         = UDim2.new(1, -10, 0.5, 0)
                 Track.Size             = UDim2.new(0, 36, 0, 20)
                 Track.BackgroundColor3 = toggled and T.Accent or T.Track
                 AddCorner(Track, 100)
-
                 local Knob = Instance.new("Frame", Track)
-                Knob.BackgroundColor3 = Color3.new(1, 1, 1)
-                Knob.AnchorPoint      = Vector2.new(0, 0.5)
-                Knob.Position         = UDim2.new(0, toggled and 18 or 2, 0.5, 0)
-                Knob.Size             = UDim2.new(0, 16, 0, 16)
-                AddCorner(Knob, 100)
-
+                Knob.BackgroundColor3 = Color3.new(1, 1, 1); Knob.AnchorPoint = Vector2.new(0, 0.5)
+                Knob.Position = UDim2.new(0, toggled and 18 or 2, 0.5, 0)
+                Knob.Size = UDim2.new(0, 16, 0, 16); AddCorner(Knob, 100)
                 local function Refresh(val)
                     TweenPlay(Track, {BackgroundColor3 = val and T.Accent or T.Track}, 0.2)
-                    TweenPlay(Knob,  {Position = UDim2.new(0, val and 18 or 2, 0.5, 0)}, 0.22, Enum.EasingStyle.Back)
+                    TweenPlay(Knob,  {Position = UDim2.new(0, val and 18 or 2, 0.5, 0)},
+                        0.22, Enum.EasingStyle.Back)
                 end
-
                 local clickable = Instance.new("TextButton", row)
-                clickable.BackgroundTransparency = 1
-                clickable.Size             = UDim2.new(1, 0, 1, 0)
-                clickable.Text             = ""; clickable.ZIndex = row.ZIndex + 1
-                clickable.AutoButtonColor  = false
+                clickable.BackgroundTransparency = 1; clickable.Size = UDim2.new(1, 0, 1, 0)
+                clickable.Text = ""; clickable.ZIndex = row.ZIndex + 1; clickable.AutoButtonColor = false
                 local _onChanged = nil
                 clickable.MouseButton1Click:Connect(function()
-                    toggled = not toggled
-                    Refresh(toggled)
-                    task.spawn(cb, toggled)
+                    toggled = not toggled; Refresh(toggled); task.spawn(cb, toggled)
                     if _onChanged then task.spawn(_onChanged, toggled) end
                 end)
-
                 local api = { Value = toggled, Default = default }
                 if key then Vesper.Options[key] = api end
                 function api:SetValue(val)
                     if toggled == val then return end
-                    toggled = val; self.Value = val
-                    Refresh(val)
-                    task.spawn(cb, val)
+                    toggled = val; self.Value = val; Refresh(val); task.spawn(cb, val)
                     if _onChanged then task.spawn(_onChanged, val) end
                 end
                 function api:GetState() return toggled end
@@ -932,127 +917,87 @@ function Vesper:CreateWindow(cfg)
                 return api
             end
 
-            -- ── CreateSlider ─────────────────────────────────────
+            -- CreateSlider
             function SecAPI:CreateSlider(key, cfg3)
                 if type(key) == "table" then cfg3 = key; key = nil end
                 cfg3 = cfg3 or {}
-                local title    = cfg3.Title       or cfg3[1] or "Slider"
+                local title    = cfg3.Title or cfg3[1] or "Slider"
                 local desc     = cfg3.Description or cfg3.Desc or nil
-                local min      = cfg3.Min         or 0
-                local max      = cfg3.Max         or 100
-                local default  = cfg3.Default     or min
-                local rounding = cfg3.Rounding    or 0
-                local suffix   = cfg3.Suffix      or ""
-                local cb       = cfg3.Callback    or function() end
-
+                local min      = cfg3.Min      or 0
+                local max      = cfg3.Max      or 100
+                local default  = cfg3.Default  or min
+                local rounding = cfg3.Rounding or 0
+                local suffix   = cfg3.Suffix   or ""
+                local cb       = cfg3.Callback or function() end
                 local function Round(n)
                     if rounding == 0 then return math.floor(n + 0.5) end
-                    local m = 10 ^ rounding; return math.floor(n * m + 0.5) / m
+                    local m = 10^rounding; return math.floor(n*m+0.5)/m
                 end
-                local val    = Round(math.clamp(default, min, max))
-                local height = desc and 54 or 48
-                local row    = MakeRow(height)
-
-                local TL = Instance.new("TextLabel", row)
-                TL.BackgroundTransparency = 1
-                TL.Position       = UDim2.new(0, 10, 0, 7)
-                TL.Size           = UDim2.new(0.6, 0, 0, 16)
-                TL.Font           = Enum.Font.GothamBold
-                TL.Text           = title
-                TL.TextColor3     = T.Text
-                TL.TextSize       = 12
-                TL.TextXAlignment = Enum.TextXAlignment.Left
-                TC(TL, "TextColor3", "Text")
-
+                local val  = Round(math.clamp(default, min, max))
+                local row  = MakeRow(desc and 54 or 48)
+                local TL   = Instance.new("TextLabel", row)
+                TL.BackgroundTransparency = 1; TL.Position = UDim2.new(0, 10, 0, 7)
+                TL.Size = UDim2.new(0.6, 0, 0, 16); TL.Font = Enum.Font.GothamBold
+                TL.Text = title; TL.TextColor3 = T.Text; TL.TextSize = 12
+                TL.TextXAlignment = Enum.TextXAlignment.Left; TC(TL, "TextColor3", "Text")
                 local VL = Instance.new("TextLabel", row)
-                VL.BackgroundTransparency = 1
-                VL.Position       = UDim2.new(0.6, 0, 0, 7)
-                VL.Size           = UDim2.new(0.4, -12, 0, 16)
-                VL.Font           = Enum.Font.GothamBold
-                VL.Text           = tostring(val) .. suffix
-                VL.TextColor3     = T.Accent
-                VL.TextSize       = 12
-                VL.TextXAlignment = Enum.TextXAlignment.Right
-                TC(VL, "TextColor3", "Accent")
-
+                VL.BackgroundTransparency = 1; VL.Position = UDim2.new(0.6, 0, 0, 7)
+                VL.Size = UDim2.new(0.4, -12, 0, 16); VL.Font = Enum.Font.GothamBold
+                VL.Text = tostring(val) .. suffix; VL.TextColor3 = T.Accent; VL.TextSize = 12
+                VL.TextXAlignment = Enum.TextXAlignment.Right; TC(VL, "TextColor3", "Accent")
                 if desc then
                     local DL = Instance.new("TextLabel", row)
-                    DL.BackgroundTransparency = 1
-                    DL.Position       = UDim2.new(0, 10, 0, 24)
-                    DL.Size           = UDim2.new(1, -20, 0, 11)
-                    DL.Font           = Enum.Font.Gotham
-                    DL.Text           = desc
-                    DL.TextColor3     = T.SubText
-                    DL.TextSize       = 10
+                    DL.BackgroundTransparency = 1; DL.Position = UDim2.new(0, 10, 0, 24)
+                    DL.Size = UDim2.new(1, -20, 0, 11); DL.Font = Enum.Font.Gotham
+                    DL.Text = desc; DL.TextColor3 = T.SubText; DL.TextSize = 10
                     DL.TextXAlignment = Enum.TextXAlignment.Left
-                    DL.TextTruncate   = Enum.TextTruncate.AtEnd
-                    TC(DL, "TextColor3", "SubText")
+                    DL.TextTruncate = Enum.TextTruncate.AtEnd; TC(DL, "TextColor3", "SubText")
                 end
-
                 local trackY = desc and 37 or 32
                 local Track  = Instance.new("TextButton", row)
-                Track.BackgroundColor3 = T.Track
-                Track.BorderSizePixel  = 0
-                Track.Position         = UDim2.new(0, 10, 0, trackY)
-                Track.Size             = UDim2.new(1, -20, 0, 8)
-                Track.Text             = ""; Track.AutoButtonColor = false
-                AddCorner(Track, 100)
+                Track.BackgroundColor3 = T.Track; Track.BorderSizePixel = 0
+                Track.Position = UDim2.new(0, 10, 0, trackY); Track.Size = UDim2.new(1, -20, 0, 8)
+                Track.Text = ""; Track.AutoButtonColor = false; AddCorner(Track, 100)
                 TC(Track, "BackgroundColor3", "Track")
-
                 local Fill = Instance.new("Frame", Track)
                 Fill.BackgroundColor3 = T.Accent
-                Fill.Size             = UDim2.new((val - min) / (max - min), 0, 1, 0)
-                Fill.BorderSizePixel  = 0
-                AddCorner(Fill, 100)
-                TC(Fill, "BackgroundColor3", "Accent")
-
+                Fill.Size = UDim2.new((val-min)/(max-min), 0, 1, 0); Fill.BorderSizePixel = 0
+                AddCorner(Fill, 100); TC(Fill, "BackgroundColor3", "Accent")
                 local FillGlow = Instance.new("ImageLabel", Fill)
-                FillGlow.BackgroundTransparency = 1
-                FillGlow.AnchorPoint            = Vector2.new(1, 0.5)
-                FillGlow.Position               = UDim2.new(1, 0, 0.5, 0)
-                FillGlow.Size                   = UDim2.new(0, 22, 0, 22)
-                FillGlow.Image                  = "rbxassetid://4996891970"
-                FillGlow.ImageColor3            = T.Accent
-                FillGlow.ImageTransparency      = 0.5
-                TC(FillGlow, "ImageColor3", "Accent")
-
+                FillGlow.BackgroundTransparency = 1; FillGlow.AnchorPoint = Vector2.new(1, 0.5)
+                FillGlow.Position = UDim2.new(1, 0, 0.5, 0); FillGlow.Size = UDim2.new(0, 22, 0, 22)
+                FillGlow.Image = "rbxassetid://4996891970"; FillGlow.ImageColor3 = T.Accent
+                FillGlow.ImageTransparency = 0.5; TC(FillGlow, "ImageColor3", "Accent")
                 local Knob = Instance.new("Frame", Track)
-                Knob.BackgroundColor3 = Color3.new(1, 1, 1)
-                Knob.AnchorPoint      = Vector2.new(0.5, 0.5)
-                Knob.Position         = UDim2.new((val - min) / (max - min), 0, 0.5, 0)
-                Knob.Size             = UDim2.new(0, 14, 0, 14)
+                Knob.BackgroundColor3 = Color3.new(1, 1, 1); Knob.AnchorPoint = Vector2.new(0.5, 0.5)
+                Knob.Position = UDim2.new((val-min)/(max-min), 0, 0.5, 0); Knob.Size = UDim2.new(0, 14, 0, 14)
                 AddCorner(Knob, 100); AddStroke(Knob, Color3.new(0, 0, 0), 1, 0.7)
-
                 local dragging = false; local _onChanged = nil
                 local function SetValFromPx(px)
                     local pct = math.clamp((px - Track.AbsolutePosition.X) / Track.AbsoluteSize.X, 0, 1)
-                    val = Round(min + (max - min) * pct)
-                    local p = (val - min) / (max - min)
+                    val = Round(min + (max-min)*pct)
+                    local p = (val-min)/(max-min)
                     TweenPlay(Fill,  {Size     = UDim2.new(p, 0, 1, 0)}, 0.05)
                     TweenPlay(Knob,  {Position = UDim2.new(p, 0, 0.5, 0)}, 0.05)
-                    VL.Text = tostring(val) .. suffix
-                    task.spawn(cb, val)
+                    VL.Text = tostring(val) .. suffix; task.spawn(cb, val)
                     if _onChanged then task.spawn(_onChanged, val) end
                 end
                 Track.InputBegan:Connect(function(i)
                     if i.UserInputType == Enum.UserInputType.MouseButton1 then
-                        dragging = true; SetValFromPx(i.Position.X)
-                    end
+                        dragging = true; SetValFromPx(i.Position.X) end
                 end)
                 UIS.InputEnded:Connect(function(i)
                     if i.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
                 end)
                 UIS.InputChanged:Connect(function(i)
                     if dragging and i.UserInputType == Enum.UserInputType.MouseMovement then
-                        SetValFromPx(i.Position.X)
-                    end
+                        SetValFromPx(i.Position.X) end
                 end)
-
                 local api = { Value = val, Default = default }
                 if key then Vesper.Options[key] = api end
                 function api:SetValue(v)
                     val = Round(math.clamp(v, min, max)); self.Value = val
-                    local p = (val - min) / (max - min)
+                    local p = (val-min)/(max-min)
                     TweenPlay(Fill,  {Size     = UDim2.new(p, 0, 1, 0)}, 0.1)
                     TweenPlay(Knob,  {Position = UDim2.new(p, 0, 0.5, 0)}, 0.1)
                     VL.Text = tostring(val) .. suffix
@@ -1062,21 +1007,19 @@ function Vesper:CreateWindow(cfg)
                 return api
             end
 
-            -- ── CreateDropdown ───────────────────────────────────
+            -- CreateDropdown
             function SecAPI:CreateDropdown(key, cfg3)
                 if type(key) == "table" then cfg3 = key; key = nil end
                 cfg3 = cfg3 or {}
-                local title   = cfg3.Title       or cfg3[1] or "Dropdown"
-                local desc    = cfg3.Description or cfg3.Desc or nil
-                local items   = cfg3.Values      or cfg3.Options or cfg3[2] or {}
-                local multi   = cfg3.Multi       or false
-                local cb      = cfg3.Callback    or function() end
+                local title  = cfg3.Title or cfg3[1] or "Dropdown"
+                local desc   = cfg3.Description or cfg3.Desc or nil
+                local items  = cfg3.Values or cfg3.Options or cfg3[2] or {}
+                local multi  = cfg3.Multi or false
+                local cb     = cfg3.Callback or function() end
                 local MAX_VIS = 5
                 local selected = {}
-
                 if cfg3.Default then
-                    if type(cfg3.Default) == "string" then
-                        selected = {cfg3.Default}
+                    if type(cfg3.Default) == "string" then selected = {cfg3.Default}
                     elseif type(cfg3.Default) == "table" then
                         if cfg3.Default[1] then selected = cfg3.Default
                         else for k, v in pairs(cfg3.Default) do if v then table.insert(selected, k) end end end
@@ -1084,81 +1027,50 @@ function Vesper:CreateWindow(cfg)
                         selected = items[cfg3.Default] and {items[cfg3.Default]} or {}
                     end
                 end
-
                 local isOpen = false
                 local height = desc and 44 or 32
-                local wrap   = MakeRow(height)
-                wrap.ClipsDescendants = false; wrap.ZIndex = 5
-
+                local wrap   = MakeRow(height); wrap.ClipsDescendants = false; wrap.ZIndex = 5
                 local TopBtn = Instance.new("TextButton", wrap)
-                TopBtn.BackgroundTransparency = 1
-                TopBtn.Size             = UDim2.new(1, 0, 0, height)
-                TopBtn.Text             = ""; TopBtn.AutoButtonColor = false; TopBtn.ZIndex = 6
+                TopBtn.BackgroundTransparency = 1; TopBtn.Size = UDim2.new(1, 0, 0, height)
+                TopBtn.Text = ""; TopBtn.AutoButtonColor = false; TopBtn.ZIndex = 6
                 MakeTitle(wrap, title, desc, 10)
-
                 local DispTxt = Instance.new("TextLabel", TopBtn)
-                DispTxt.BackgroundTransparency = 1
-                DispTxt.AnchorPoint      = Vector2.new(1, 0.5)
-                DispTxt.Position         = UDim2.new(1, -30, 0.5, 0)
-                DispTxt.Size             = UDim2.new(0.5, -35, 0, 14)
-                DispTxt.Font             = Enum.Font.Gotham
-                DispTxt.TextColor3       = T.Accent
-                DispTxt.TextSize         = 11
-                DispTxt.TextXAlignment   = Enum.TextXAlignment.Right
-                DispTxt.TextTruncate     = Enum.TextTruncate.AtEnd
-                DispTxt.ZIndex           = 6
+                DispTxt.BackgroundTransparency = 1; DispTxt.AnchorPoint = Vector2.new(1, 0.5)
+                DispTxt.Position = UDim2.new(1, -30, 0.5, 0); DispTxt.Size = UDim2.new(0.5, -35, 0, 14)
+                DispTxt.Font = Enum.Font.Gotham; DispTxt.TextColor3 = T.Accent; DispTxt.TextSize = 11
+                DispTxt.TextXAlignment = Enum.TextXAlignment.Right
+                DispTxt.TextTruncate = Enum.TextTruncate.AtEnd; DispTxt.ZIndex = 6
                 TC(DispTxt, "TextColor3", "Accent")
-
                 local Chev = Instance.new("ImageLabel", TopBtn)
-                Chev.BackgroundTransparency = 1
-                Chev.AnchorPoint  = Vector2.new(1, 0.5)
-                Chev.Position     = UDim2.new(1, -8, 0.5, 0)
-                Chev.Size         = UDim2.new(0, 16, 0, 16)
-                Chev.Image        = Icon("lucide-chevron-down")
-                Chev.ImageColor3  = T.Muted
-                Chev.ZIndex       = 6
+                Chev.BackgroundTransparency = 1; Chev.AnchorPoint = Vector2.new(1, 0.5)
+                Chev.Position = UDim2.new(1, -8, 0.5, 0); Chev.Size = UDim2.new(0, 16, 0, 16)
+                Chev.Image = Icon("lucide-chevron-down"); Chev.ImageColor3 = T.Muted; Chev.ZIndex = 6
                 TC(Chev, "ImageColor3", "Muted")
-
                 local Panel = Instance.new("Frame", wrap)
-                Panel.BackgroundColor3 = T.Surface
-                Panel.BorderSizePixel  = 0
-                Panel.Position         = UDim2.new(0, 0, 1, 4)
-                Panel.Size             = UDim2.new(1, 0, 0, 0)
-                Panel.ClipsDescendants = true
-                Panel.Visible          = false
-                Panel.ZIndex           = 20
-                AddCorner(Panel, 6); AddStroke(Panel, T.Border, 1)
+                Panel.BackgroundColor3 = T.Surface; Panel.BorderSizePixel = 0
+                Panel.Position = UDim2.new(0, 0, 1, 4); Panel.Size = UDim2.new(1, 0, 0, 0)
+                Panel.ClipsDescendants = true; Panel.Visible = false; Panel.ZIndex = 20
+                AddCorner(Panel, 6)
+                -- ▼ FIX: track the dropdown panel border stroke
+                TCS(AddStroke(Panel, T.Border, 1), "Border")
                 TC(Panel, "BackgroundColor3", "Surface")
-
                 local SearchBox = Instance.new("TextBox", Panel)
-                SearchBox.BackgroundColor3  = T.InputBg
-                SearchBox.BorderSizePixel   = 0
-                SearchBox.Position          = UDim2.new(0, 6, 0, 6)
-                SearchBox.Size              = UDim2.new(1, -12, 0, 22)
-                SearchBox.Font              = Enum.Font.Gotham
-                SearchBox.PlaceholderText   = "Search..."
-                SearchBox.Text              = ""
-                SearchBox.TextColor3        = T.Text
-                SearchBox.PlaceholderColor3 = T.Muted
-                SearchBox.TextSize          = 11
-                SearchBox.ClearTextOnFocus  = false
-                SearchBox.ZIndex            = 22
+                SearchBox.BackgroundColor3 = T.InputBg; SearchBox.BorderSizePixel = 0
+                SearchBox.Position = UDim2.new(0, 6, 0, 6); SearchBox.Size = UDim2.new(1, -12, 0, 22)
+                SearchBox.Font = Enum.Font.Gotham; SearchBox.PlaceholderText = "Search..."
+                SearchBox.Text = ""; SearchBox.TextColor3 = T.Text
+                SearchBox.PlaceholderColor3 = T.Muted; SearchBox.TextSize = 11
+                SearchBox.ClearTextOnFocus = false; SearchBox.ZIndex = 22
                 AddCorner(SearchBox, 5); AddPad(SearchBox, 0, 0, 6, 6)
                 TC(SearchBox, "BackgroundColor3", "InputBg")
-                TC(SearchBox, "TextColor3", "Text")
-                TC(SearchBox, "PlaceholderColor3", "Muted")
-
+                TC(SearchBox, "TextColor3",       "Text")
+                TC(SearchBox, "PlaceholderColor3","Muted")
                 local ItemScroll = Instance.new("ScrollingFrame", Panel)
                 ItemScroll.BackgroundTransparency = 1
-                ItemScroll.Position               = UDim2.new(0, 6, 0, 32)
-                ItemScroll.Size                   = UDim2.new(1, -12, 1, -38)
-                ItemScroll.ScrollBarThickness     = 2
-                ItemScroll.ScrollBarImageColor3   = T.Accent
-                ItemScroll.CanvasSize             = UDim2.new(0, 0, 0, 0)
-                ItemScroll.ZIndex                 = 22
-                AddList(ItemScroll, 2)
-                TC(ItemScroll, "ScrollBarImageColor3", "Accent")
-
+                ItemScroll.Position = UDim2.new(0, 6, 0, 32); ItemScroll.Size = UDim2.new(1, -12, 1, -38)
+                ItemScroll.ScrollBarThickness = 2; ItemScroll.ScrollBarImageColor3 = T.Accent
+                ItemScroll.CanvasSize = UDim2.new(0, 0, 0, 0); ItemScroll.ZIndex = 22
+                AddList(ItemScroll, 2); TC(ItemScroll, "ScrollBarImageColor3", "Accent")
                 local _onChanged = nil
                 local function GetDisplayText()
                     if #selected == 0     then return multi and "None" or "Select..."
@@ -1167,7 +1079,6 @@ function Vesper:CreateWindow(cfg)
                     else                       return #selected .. " selected" end
                 end
                 local function RefreshDisplay() DispTxt.Text = GetDisplayText() end
-
                 local itemBtns = {}
                 local function BuildList(filter)
                     for _, b in pairs(itemBtns) do b:Destroy() end; itemBtns = {}
@@ -1178,37 +1089,29 @@ function Vesper:CreateWindow(cfg)
                             for _, s in ipairs(selected) do if s == item then isSel = true; break end end
                             local IBtn = Instance.new("TextButton", ItemScroll)
                             IBtn.BackgroundColor3 = isSel and T.AccentDim or T.SurfaceHigh
-                            IBtn.BorderSizePixel  = 0
-                            IBtn.Size             = UDim2.new(1, 0, 0, 26)
-                            IBtn.Font             = Enum.Font.Gotham
-                            IBtn.Text             = "  " .. item
-                            IBtn.TextColor3       = isSel and T.Text or T.SubText
-                            IBtn.TextSize         = 11
-                            IBtn.TextXAlignment   = Enum.TextXAlignment.Left
-                            IBtn.ZIndex           = 23
-                            AddCorner(IBtn, 5)
+                            IBtn.BorderSizePixel = 0; IBtn.Size = UDim2.new(1, 0, 0, 26)
+                            IBtn.Font = Enum.Font.Gotham; IBtn.Text = "  " .. item
+                            IBtn.TextColor3 = isSel and T.Text or T.SubText; IBtn.TextSize = 11
+                            IBtn.TextXAlignment = Enum.TextXAlignment.Left; IBtn.ZIndex = 23; AddCorner(IBtn, 5)
                             IBtn.MouseEnter:Connect(function()
-                                if not isSel then TweenPlay(IBtn, {BackgroundColor3 = T.SidebarHover}, 0.1) end
-                            end)
+                                if not isSel then TweenPlay(IBtn,{BackgroundColor3=T.SidebarHover},0.1) end end)
                             IBtn.MouseLeave:Connect(function()
-                                if not isSel then TweenPlay(IBtn, {BackgroundColor3 = T.SurfaceHigh}, 0.1) end
-                            end)
+                                if not isSel then TweenPlay(IBtn,{BackgroundColor3=T.SurfaceHigh},0.1) end end)
                             IBtn.MouseButton1Click:Connect(function()
                                 if multi then
                                     isSel = not isSel
                                     if isSel then table.insert(selected, item)
-                                    else for i, v in ipairs(selected) do if v == item then table.remove(selected, i); break end end end
+                                    else for i, v in ipairs(selected) do if v==item then table.remove(selected,i); break end end end
                                     IBtn.BackgroundColor3 = isSel and T.AccentDim or T.SurfaceHigh
                                     IBtn.TextColor3       = isSel and T.Text or T.SubText
                                     RefreshDisplay(); task.spawn(cb, selected)
                                     if _onChanged then task.spawn(_onChanged, selected) end
                                 else
-                                    selected = {item}; RefreshDisplay()
-                                    task.spawn(cb, item)
+                                    selected = {item}; RefreshDisplay(); task.spawn(cb, item)
                                     if _onChanged then task.spawn(_onChanged, item) end
                                     isOpen = false
-                                    TweenPlay(Panel, {Size = UDim2.new(1, 0, 0, 0)}, 0.18, Enum.EasingStyle.Quint)
-                                    TweenPlay(Chev,  {Rotation = 0}, 0.18)
+                                    TweenPlay(Panel, {Size=UDim2.new(1,0,0,0)}, 0.18, Enum.EasingStyle.Quint)
+                                    TweenPlay(Chev,  {Rotation=0}, 0.18)
                                     task.delay(0.18, function() Panel.Visible = false end)
                                 end
                             end)
@@ -1218,10 +1121,9 @@ function Vesper:CreateWindow(cfg)
                     ItemScroll.CanvasSize = UDim2.new(0, 0, 0, count * 28)
                     if isOpen then
                         local ph = math.min(count, MAX_VIS) * 28 + 40
-                        TweenPlay(Panel, {Size = UDim2.new(1, 0, 0, ph)}, 0.15)
+                        TweenPlay(Panel, {Size=UDim2.new(1,0,0,ph)}, 0.15)
                     end
                 end
-
                 SearchBox:GetPropertyChangedSignal("Text"):Connect(function() BuildList(SearchBox.Text) end)
                 TopBtn.MouseButton1Click:Connect(function()
                     isOpen = not isOpen
@@ -1229,16 +1131,15 @@ function Vesper:CreateWindow(cfg)
                         SearchBox.Text = ""; Panel.Visible = true; BuildList("")
                         local ph = math.min(#items, MAX_VIS) * 28 + 40
                         Panel.Size = UDim2.new(1, 0, 0, 0)
-                        TweenPlay(Panel, {Size = UDim2.new(1, 0, 0, ph)}, 0.22, Enum.EasingStyle.Back)
-                        TweenPlay(Chev,  {Rotation = 180}, 0.2)
+                        TweenPlay(Panel, {Size=UDim2.new(1,0,0,ph)}, 0.22, Enum.EasingStyle.Back)
+                        TweenPlay(Chev,  {Rotation=180}, 0.2)
                     else
-                        TweenPlay(Panel, {Size = UDim2.new(1, 0, 0, 0)}, 0.18, Enum.EasingStyle.Quint)
-                        TweenPlay(Chev,  {Rotation = 0}, 0.18)
+                        TweenPlay(Panel, {Size=UDim2.new(1,0,0,0)}, 0.18, Enum.EasingStyle.Quint)
+                        TweenPlay(Chev,  {Rotation=0}, 0.18)
                         task.delay(0.18, function() Panel.Visible = false end)
                     end
                 end)
                 RefreshDisplay()
-
                 local api = { Value = multi and selected or (selected[1] or nil), Default = cfg3.Default }
                 if key then Vesper.Options[key] = api end
                 function api:SetValue(v)
@@ -1257,43 +1158,34 @@ function Vesper:CreateWindow(cfg)
                 return api
             end
 
-            -- ── CreateTextBox ────────────────────────────────────
+            -- CreateTextBox
             function SecAPI:CreateTextBox(key, cfg3)
                 if type(key) == "table" then cfg3 = key; key = nil end
                 cfg3 = cfg3 or {}
-                local title    = cfg3.Title       or cfg3[1] or "Input"
+                local title    = cfg3.Title or cfg3[1] or "Input"
                 local desc     = cfg3.Description or cfg3.Desc or nil
-                local default  = cfg3.Default     or ""
+                local default  = cfg3.Default or ""
                 local ph       = cfg3.Placeholder or "Type here..."
-                local numeric  = cfg3.Numeric     or false
-                local finished = cfg3.Finished    or false
-                local cb       = cfg3.Callback    or function() end
+                local numeric  = cfg3.Numeric  or false
+                local finished = cfg3.Finished or false
+                local cb       = cfg3.Callback or function() end
                 local height   = desc and 56 or 50
-                local F        = MakeRow(height)
-                MakeTitle(F, title, desc, 10)
-
-                local InputBg = Instance.new("Frame", F)
-                InputBg.BackgroundColor3 = T.InputBg
-                InputBg.BorderSizePixel  = 0
-                InputBg.Position         = UDim2.new(0, 8, 0, desc and 38 or 28)
-                InputBg.Size             = UDim2.new(1, -16, 0, 18)
-                AddCorner(InputBg, 4); AddStroke(InputBg, T.Border, 1)
+                local F        = MakeRow(height); MakeTitle(F, title, desc, 10)
+                local InputBg  = Instance.new("Frame", F)
+                InputBg.BackgroundColor3 = T.InputBg; InputBg.BorderSizePixel = 0
+                InputBg.Position = UDim2.new(0, 8, 0, desc and 38 or 28)
+                InputBg.Size     = UDim2.new(1, -16, 0, 18)
+                AddCorner(InputBg, 4)
+                -- ▼ FIX: track textbox input border stroke
+                TCS(AddStroke(InputBg, T.Border, 1), "Border")
                 TC(InputBg, "BackgroundColor3", "InputBg")
-
                 local Box = Instance.new("TextBox", InputBg)
-                Box.BackgroundTransparency = 1
-                Box.Position          = UDim2.new(0, 6, 0, 0)
-                Box.Size              = UDim2.new(1, -12, 1, 0)
-                Box.Font              = Enum.Font.Gotham
-                Box.PlaceholderText   = ph
-                Box.PlaceholderColor3 = T.Muted
-                Box.Text              = tostring(default)
-                Box.TextColor3        = T.Text
-                Box.TextSize          = 11
-                Box.ClearTextOnFocus  = false
-                TC(Box, "TextColor3", "Text")
-                TC(Box, "PlaceholderColor3", "Muted")
-
+                Box.BackgroundTransparency = 1; Box.Position = UDim2.new(0, 6, 0, 0)
+                Box.Size = UDim2.new(1, -12, 1, 0); Box.Font = Enum.Font.Gotham
+                Box.PlaceholderText = ph; Box.PlaceholderColor3 = T.Muted
+                Box.Text = tostring(default); Box.TextColor3 = T.Text; Box.TextSize = 11
+                Box.ClearTextOnFocus = false
+                TC(Box, "TextColor3", "Text"); TC(Box, "PlaceholderColor3", "Muted")
                 local _onChanged = nil
                 Box.Focused:Connect(function()   TweenPlay(InputBg, {BackgroundColor3 = T.Surface},  0.15) end)
                 Box.FocusLost:Connect(function(enter)
@@ -1309,7 +1201,6 @@ function Vesper:CreateWindow(cfg)
                         if _onChanged then task.spawn(_onChanged, Box.Text) end
                     end)
                 end
-
                 local api = { Value = default, Default = default }
                 if key then Vesper.Options[key] = api end
                 function api:SetValue(v) Box.Text = tostring(v); self.Value = v end
@@ -1318,158 +1209,113 @@ function Vesper:CreateWindow(cfg)
                 return api
             end
 
-            -- ── CreateKeybind ────────────────────────────────────
+            -- CreateKeybind
             function SecAPI:CreateKeybind(key, cfg3)
                 if type(key) == "table" then cfg3 = key; key = nil end
                 cfg3 = cfg3 or {}
-                local title      = cfg3.Title          or cfg3[1] or "Keybind"
-                local desc       = cfg3.Description    or cfg3.Desc or nil
-                local mode       = cfg3.Mode           or "Toggle"
-                local cb         = cfg3.Callback       or function() end
-                local changedCb  = cfg3.ChangedCallback or function() end
+                local title     = cfg3.Title or cfg3[1] or "Keybind"
+                local desc      = cfg3.Description or cfg3.Desc or nil
+                local mode      = cfg3.Mode or "Toggle"
+                local cb        = cfg3.Callback or function() end
+                local changedCb = cfg3.ChangedCallback or function() end
                 local currentKey
                 local defaultStr = cfg3.Default or "E"
-                if type(defaultStr) == "string" then
-                    currentKey = Enum.KeyCode[defaultStr] or Enum.KeyCode.E
+                if type(defaultStr) == "string" then currentKey = Enum.KeyCode[defaultStr] or Enum.KeyCode.E
                 else currentKey = defaultStr end
-
                 local listening = false; local holdState = false; local toggleState = false
                 local _onClick = nil; local _onChanged2 = nil
-                local height = desc and 44 or 32
-                local row    = MakeRow(height)
-                MakeTitle(row, title, desc, 10)
-
+                local row = MakeRow(desc and 44 or 32); MakeTitle(row, title, desc, 10)
                 local KeyBtn = Instance.new("TextButton", row)
-                KeyBtn.BackgroundColor3 = T.Track
-                KeyBtn.AnchorPoint      = Vector2.new(1, 0.5)
-                KeyBtn.Position         = UDim2.new(1, -8, 0.5, 0)
-                KeyBtn.Size             = UDim2.new(0, 0, 0, 22)
-                KeyBtn.AutomaticSize    = Enum.AutomaticSize.X
-                KeyBtn.Font             = Enum.Font.GothamBold
-                KeyBtn.Text             = currentKey.Name
-                KeyBtn.TextColor3       = T.Accent
-                KeyBtn.TextSize         = 11
-                KeyBtn.AutoButtonColor  = false
-                AddCorner(KeyBtn, 5); AddPad(KeyBtn, 0, 0, 8, 8)
-                TC(KeyBtn, "BackgroundColor3", "Track")
-                TC(KeyBtn, "TextColor3", "Accent")
-
+                KeyBtn.BackgroundColor3 = T.Track; KeyBtn.AnchorPoint = Vector2.new(1, 0.5)
+                KeyBtn.Position = UDim2.new(1, -8, 0.5, 0); KeyBtn.Size = UDim2.new(0, 0, 0, 22)
+                KeyBtn.AutomaticSize = Enum.AutomaticSize.X; KeyBtn.Font = Enum.Font.GothamBold
+                KeyBtn.Text = currentKey.Name; KeyBtn.TextColor3 = T.Accent; KeyBtn.TextSize = 11
+                KeyBtn.AutoButtonColor = false; AddCorner(KeyBtn, 5); AddPad(KeyBtn, 0, 0, 8, 8)
+                TC(KeyBtn, "BackgroundColor3", "Track"); TC(KeyBtn, "TextColor3", "Accent")
                 KeyBtn.MouseButton1Click:Connect(function()
-                    listening = true; KeyBtn.Text = "..."; KeyBtn.TextColor3 = T.Warning
-                end)
+                    listening = true; KeyBtn.Text = "..."; KeyBtn.TextColor3 = T.Warning end)
                 UIS.InputBegan:Connect(function(i, processed)
                     if listening and i.UserInputType == Enum.UserInputType.Keyboard then
                         currentKey = i.KeyCode; KeyBtn.Text = currentKey.Name
                         KeyBtn.TextColor3 = T.Accent; listening = false
                         task.spawn(changedCb, currentKey)
-                        if _onChanged2 then task.spawn(_onChanged2, currentKey) end
-                        return
+                        if _onChanged2 then task.spawn(_onChanged2, currentKey) end; return
                     end
                     if not listening and not processed and i.KeyCode == currentKey then
                         if mode == "Toggle" then
-                            toggleState = not toggleState
-                            task.spawn(cb, toggleState)
+                            toggleState = not toggleState; task.spawn(cb, toggleState)
                             if _onClick then task.spawn(_onClick) end
-                        elseif mode == "Hold" then
-                            holdState = true; task.spawn(cb, true)
-                        elseif mode == "Always" then
-                            task.spawn(cb, true)
-                        end
+                        elseif mode == "Hold"   then holdState = true; task.spawn(cb, true)
+                        elseif mode == "Always" then task.spawn(cb, true) end
                     end
                 end)
                 UIS.InputEnded:Connect(function(i)
-                    if mode == "Hold" and i.KeyCode == currentKey then
-                        holdState = false; task.spawn(cb, false)
-                    end
+                    if mode == "Hold" and i.KeyCode == currentKey then holdState = false; task.spawn(cb, false) end
                 end)
-
                 local api = { Value = currentKey, Default = currentKey }
                 if key then Vesper.Options[key] = api end
                 function api:SetValue(k, m)
                     if type(k) == "string" then currentKey = Enum.KeyCode[k] or currentKey
                     else currentKey = k end
-                    if m then mode = m end
-                    KeyBtn.Text = currentKey.Name; self.Value = currentKey
+                    if m then mode = m end; KeyBtn.Text = currentKey.Name; self.Value = currentKey
                 end
                 function api:GetState()
                     if mode == "Toggle" then return toggleState
-                    elseif mode == "Hold" then return holdState end
-                    return false
+                    elseif mode == "Hold" then return holdState end; return false
                 end
                 function api:OnClick(fn)   _onClick    = fn end
                 function api:OnChanged(fn) _onChanged2 = fn end
                 return api
             end
 
-            -- ── CreateColorPicker ────────────────────────────────
+            -- CreateColorPicker
             function SecAPI:CreateColorPicker(key, cfg3)
                 if type(key) == "table" then cfg3 = key; key = nil end
                 cfg3 = cfg3 or {}
-                local title    = cfg3.Title        or cfg3[1] or "Color"
-                local desc     = cfg3.Description  or cfg3.Desc or nil
-                local default  = cfg3.Default      or Color3.fromRGB(139, 92, 246)
+                local title    = cfg3.Title or cfg3[1] or "Color"
+                local desc     = cfg3.Description or cfg3.Desc or nil
+                local default  = cfg3.Default or Color3.fromRGB(139, 92, 246)
                 local useAlpha = cfg3.Transparency ~= nil
                 local alpha    = 1 - (cfg3.Transparency or 0)
-                local cb       = cfg3.Callback     or function() end
-                local color    = default
-                local h, s, v  = color:ToHSV()
+                local cb       = cfg3.Callback or function() end
+                local color    = default; local h, s, v = color:ToHSV()
                 local isOpen   = false; local _onChanged = nil
                 local rowH     = desc and 44 or 32
                 local wrap     = MakeRow(rowH); wrap.ClipsDescendants = true
-
-                local CHeader = Instance.new("TextButton", wrap)
-                CHeader.BackgroundTransparency = 1
-                CHeader.Size             = UDim2.new(1, 0, 0, rowH)
-                CHeader.Text             = ""; CHeader.AutoButtonColor = false
+                local CHeader  = Instance.new("TextButton", wrap)
+                CHeader.BackgroundTransparency = 1; CHeader.Size = UDim2.new(1, 0, 0, rowH)
+                CHeader.Text = ""; CHeader.AutoButtonColor = false
                 MakeTitle(wrap, title, desc, 10)
-
                 local Preview = Instance.new("Frame", wrap)
-                Preview.BackgroundColor3 = color
-                Preview.AnchorPoint      = Vector2.new(1, 0.5)
-                Preview.Position         = UDim2.new(1, -10, 0.5, 0)
-                Preview.Size             = UDim2.new(0, 38, 0, 18)
-                AddCorner(Preview, 5); AddStroke(Preview, T.Border, 1)
-
+                Preview.BackgroundColor3 = color; Preview.AnchorPoint = Vector2.new(1, 0.5)
+                Preview.Position = UDim2.new(1, -10, 0.5, 0); Preview.Size = UDim2.new(0, 38, 0, 18)
+                AddCorner(Preview, 5)
+                -- ▼ FIX: track colour picker preview border stroke
+                TCS(AddStroke(Preview, T.Border, 1), "Border")
                 local Panel2 = Instance.new("Frame", wrap)
                 Panel2.BackgroundTransparency = 1
                 Panel2.Position = UDim2.new(0, 8, 0, rowH + 6)
                 Panel2.Size     = UDim2.new(1, -16, 0, useAlpha and 148 or 128)
-
                 local SVMap = Instance.new("TextButton", Panel2)
-                SVMap.BackgroundColor3 = Color3.fromHSV(h, 1, 1)
-                SVMap.Position         = UDim2.new(0, 0, 0, 0)
-                SVMap.Size             = UDim2.new(1, -22, 0, 100)
-                SVMap.Text             = ""; SVMap.AutoButtonColor = false
-                AddCorner(SVMap, 5)
-
+                SVMap.BackgroundColor3 = Color3.fromHSV(h,1,1)
+                SVMap.Position = UDim2.new(0,0,0,0); SVMap.Size = UDim2.new(1,-22,0,100)
+                SVMap.Text = ""; SVMap.AutoButtonColor = false; AddCorner(SVMap, 5)
                 local WG = Instance.new("UIGradient", SVMap)
-                WG.Transparency = NumberSequence.new({NumberSequenceKeypoint.new(0,0), NumberSequenceKeypoint.new(1,1)})
-                WG.Color        = ColorSequence.new(Color3.new(1,1,1))
-
+                WG.Transparency = NumberSequence.new({NumberSequenceKeypoint.new(0,0),NumberSequenceKeypoint.new(1,1)})
+                WG.Color = ColorSequence.new(Color3.new(1,1,1))
                 local Ov = Instance.new("Frame", SVMap)
-                Ov.BackgroundColor3 = Color3.new(0,0,0)
-                Ov.BorderSizePixel  = 0
-                Ov.Size             = UDim2.new(1,0,1,0)
-                AddCorner(Ov, 5)
-                local OvG = Instance.new("UIGradient", Ov)
-                OvG.Rotation     = 90
-                OvG.Transparency = NumberSequence.new({NumberSequenceKeypoint.new(0,1), NumberSequenceKeypoint.new(1,0)})
-
+                Ov.BackgroundColor3 = Color3.new(0,0,0); Ov.BorderSizePixel = 0
+                Ov.Size = UDim2.new(1,0,1,0); AddCorner(Ov, 5)
+                local OvG = Instance.new("UIGradient", Ov); OvG.Rotation = 90
+                OvG.Transparency = NumberSequence.new({NumberSequenceKeypoint.new(0,1),NumberSequenceKeypoint.new(1,0)})
                 local SVCur = Instance.new("Frame", SVMap)
-                SVCur.BackgroundColor3 = Color3.new(1,1,1)
-                SVCur.AnchorPoint      = Vector2.new(0.5, 0.5)
-                SVCur.Position         = UDim2.new(s, 0, 1-v, 0)
-                SVCur.Size             = UDim2.new(0, 8, 0, 8)
-                SVCur.ZIndex           = 5
-                AddCorner(SVCur, 100); AddStroke(SVCur, Color3.new(0,0,0), 1, 0.4)
-
+                SVCur.BackgroundColor3 = Color3.new(1,1,1); SVCur.AnchorPoint = Vector2.new(0.5,0.5)
+                SVCur.Position = UDim2.new(s,0,1-v,0); SVCur.Size = UDim2.new(0,8,0,8); SVCur.ZIndex = 5
+                AddCorner(SVCur,100); AddStroke(SVCur,Color3.new(0,0,0),1,0.4)
                 local HueBar = Instance.new("TextButton", Panel2)
-                HueBar.BackgroundColor3 = Color3.new(1,1,1)
-                HueBar.AnchorPoint      = Vector2.new(1, 0)
-                HueBar.Position         = UDim2.new(1, 0, 0, 0)
-                HueBar.Size             = UDim2.new(0, 14, 0, 100)
-                HueBar.Text             = ""; HueBar.AutoButtonColor = false
-                AddCorner(HueBar, 6)
+                HueBar.BackgroundColor3 = Color3.new(1,1,1); HueBar.AnchorPoint = Vector2.new(1,0)
+                HueBar.Position = UDim2.new(1,0,0,0); HueBar.Size = UDim2.new(0,14,0,100)
+                HueBar.Text = ""; HueBar.AutoButtonColor = false; AddCorner(HueBar,6)
                 local HG = Instance.new("UIGradient", HueBar); HG.Rotation = 90
                 HG.Color = ColorSequence.new({
                     ColorSequenceKeypoint.new(0,     Color3.fromRGB(255,0,0)),
@@ -1480,156 +1326,92 @@ function Vesper:CreateWindow(cfg)
                     ColorSequenceKeypoint.new(0.833, Color3.fromRGB(255,0,255)),
                     ColorSequenceKeypoint.new(1,     Color3.fromRGB(255,0,0)),
                 })
-
                 local HueCur = Instance.new("Frame", HueBar)
-                HueCur.BackgroundColor3 = Color3.new(1,1,1)
-                HueCur.AnchorPoint      = Vector2.new(0.5, 0.5)
-                HueCur.Position         = UDim2.new(0.5, 0, h, 0)
-                HueCur.Size             = UDim2.new(1, 4, 0, 4)
-                HueCur.ZIndex           = 5
-                AddCorner(HueCur, 100); AddStroke(HueCur, Color3.new(0,0,0), 1, 0.4)
-
+                HueCur.BackgroundColor3 = Color3.new(1,1,1); HueCur.AnchorPoint = Vector2.new(0.5,0.5)
+                HueCur.Position = UDim2.new(0.5,0,h,0); HueCur.Size = UDim2.new(1,4,0,4); HueCur.ZIndex = 5
+                AddCorner(HueCur,100); AddStroke(HueCur,Color3.new(0,0,0),1,0.4)
                 local HexBg = Instance.new("Frame", Panel2)
-                HexBg.BackgroundColor3 = T.InputBg
-                HexBg.BorderSizePixel  = 0
-                HexBg.Position         = UDim2.new(0, 0, 0, 106)
-                HexBg.Size             = UDim2.new(1, -22, 0, 20)
-                AddCorner(HexBg, 4)
-                TC(HexBg, "BackgroundColor3", "InputBg")
-
+                HexBg.BackgroundColor3 = T.InputBg; HexBg.BorderSizePixel = 0
+                HexBg.Position = UDim2.new(0,0,0,106); HexBg.Size = UDim2.new(1,-22,0,20)
+                AddCorner(HexBg,4); TC(HexBg,"BackgroundColor3","InputBg")
                 local HexHash = Instance.new("TextLabel", HexBg)
-                HexHash.BackgroundTransparency = 1
-                HexHash.Position  = UDim2.new(0, 6, 0, 0)
-                HexHash.Size      = UDim2.new(0, 12, 1, 0)
-                HexHash.Font      = Enum.Font.GothamBold
-                HexHash.Text      = "#"; HexHash.TextColor3 = T.Muted; HexHash.TextSize = 10
-                TC(HexHash, "TextColor3", "Muted")
-
+                HexHash.BackgroundTransparency = 1; HexHash.Position = UDim2.new(0,6,0,0)
+                HexHash.Size = UDim2.new(0,12,1,0); HexHash.Font = Enum.Font.GothamBold
+                HexHash.Text = "#"; HexHash.TextColor3 = T.Muted; HexHash.TextSize = 10
+                TC(HexHash,"TextColor3","Muted")
                 local HexBox = Instance.new("TextBox", HexBg)
-                HexBox.BackgroundTransparency = 1
-                HexBox.Position = UDim2.new(0, 18, 0, 0)
-                HexBox.Size     = UDim2.new(1, -24, 1, 0)
-                HexBox.Font     = Enum.Font.Gotham
-                HexBox.Text     = string.format("%02X%02X%02X",
-                    math.floor(color.R*255), math.floor(color.G*255), math.floor(color.B*255))
-                HexBox.TextColor3       = T.Text
-                HexBox.TextSize         = 10
-                HexBox.ClearTextOnFocus = false
-                TC(HexBox, "TextColor3", "Text")
-
+                HexBox.BackgroundTransparency = 1; HexBox.Position = UDim2.new(0,18,0,0)
+                HexBox.Size = UDim2.new(1,-24,1,0); HexBox.Font = Enum.Font.Gotham
+                HexBox.Text = string.format("%02X%02X%02X",
+                    math.floor(color.R*255),math.floor(color.G*255),math.floor(color.B*255))
+                HexBox.TextColor3 = T.Text; HexBox.TextSize = 10; HexBox.ClearTextOnFocus = false
+                TC(HexBox,"TextColor3","Text")
                 local AlphaTrack, AlphaFill, AlphaCur
                 if useAlpha then
                     local AlphaBg = Instance.new("Frame", Panel2)
-                    AlphaBg.BackgroundColor3 = T.InputBg
-                    AlphaBg.BorderSizePixel  = 0
-                    AlphaBg.Position         = UDim2.new(0, 0, 0, 132)
-                    AlphaBg.Size             = UDim2.new(1, -22, 0, 16)
-                    AddCorner(AlphaBg, 100)
-                    TC(AlphaBg, "BackgroundColor3", "InputBg")
-
+                    AlphaBg.BackgroundColor3 = T.InputBg; AlphaBg.BorderSizePixel = 0
+                    AlphaBg.Position = UDim2.new(0,0,0,132); AlphaBg.Size = UDim2.new(1,-22,0,16)
+                    AddCorner(AlphaBg,100); TC(AlphaBg,"BackgroundColor3","InputBg")
                     AlphaTrack = Instance.new("TextButton", AlphaBg)
-                    AlphaTrack.BackgroundTransparency = 1
-                    AlphaTrack.Size = UDim2.new(1,0,1,0)
+                    AlphaTrack.BackgroundTransparency = 1; AlphaTrack.Size = UDim2.new(1,0,1,0)
                     AlphaTrack.Text = ""; AlphaTrack.AutoButtonColor = false
-
                     AlphaFill = Instance.new("Frame", AlphaBg)
-                    AlphaFill.BackgroundColor3 = T.Accent
-                    AlphaFill.BorderSizePixel  = 0
-                    AlphaFill.Size             = UDim2.new(alpha, 0, 1, 0)
-                    AddCorner(AlphaFill, 100)
-                    TC(AlphaFill, "BackgroundColor3", "Accent")
-
+                    AlphaFill.BackgroundColor3 = T.Accent; AlphaFill.BorderSizePixel = 0
+                    AlphaFill.Size = UDim2.new(alpha,0,1,0); AddCorner(AlphaFill,100)
+                    TC(AlphaFill,"BackgroundColor3","Accent")
                     AlphaCur = Instance.new("Frame", AlphaBg)
-                    AlphaCur.BackgroundColor3 = Color3.new(1,1,1)
-                    AlphaCur.AnchorPoint      = Vector2.new(0.5, 0.5)
-                    AlphaCur.Position         = UDim2.new(alpha, 0, 0.5, 0)
-                    AlphaCur.Size             = UDim2.new(0, 12, 0, 12)
-                    AddCorner(AlphaCur, 100); AddStroke(AlphaCur, Color3.new(0,0,0), 1, 0.5)
+                    AlphaCur.BackgroundColor3 = Color3.new(1,1,1); AlphaCur.AnchorPoint = Vector2.new(0.5,0.5)
+                    AlphaCur.Position = UDim2.new(alpha,0,0.5,0); AlphaCur.Size = UDim2.new(0,12,0,12)
+                    AddCorner(AlphaCur,100); AddStroke(AlphaCur,Color3.new(0,0,0),1,0.5)
                 end
-
                 local function UpdateColor()
-                    color = Color3.fromHSV(h, s, v)
-                    SVMap.BackgroundColor3 = Color3.fromHSV(h, 1, 1)
-                    Preview.BackgroundColor3 = color
+                    color = Color3.fromHSV(h,s,v)
+                    SVMap.BackgroundColor3 = Color3.fromHSV(h,1,1); Preview.BackgroundColor3 = color
                     HexBox.Text = string.format("%02X%02X%02X",
-                        math.floor(color.R*255), math.floor(color.G*255), math.floor(color.B*255))
-                    if AlphaFill then TweenPlay(AlphaFill, {BackgroundColor3 = color}, 0.05) end
-                    task.spawn(cb, color, 1 - alpha)
+                        math.floor(color.R*255),math.floor(color.G*255),math.floor(color.B*255))
+                    if AlphaFill then TweenPlay(AlphaFill,{BackgroundColor3=color},0.05) end
+                    task.spawn(cb,color,1-alpha)
                     if _onChanged then task.spawn(_onChanged) end
                 end
-
                 local trackSV, trackHue, trackAlpha = false, false, false
                 local function pct(i, obj, axis)
-                    if axis == "X" then return math.clamp((i.Position.X - obj.AbsolutePosition.X) / obj.AbsoluteSize.X, 0, 1) end
-                    return math.clamp((i.Position.Y - obj.AbsolutePosition.Y) / obj.AbsoluteSize.Y, 0, 1)
+                    if axis=="X" then return math.clamp((i.Position.X-obj.AbsolutePosition.X)/obj.AbsoluteSize.X,0,1) end
+                    return math.clamp((i.Position.Y-obj.AbsolutePosition.Y)/obj.AbsoluteSize.Y,0,1)
                 end
                 SVMap.InputBegan:Connect(function(i)
-                    if i.UserInputType == Enum.UserInputType.MouseButton1 then
-                        trackSV = true; s = pct(i,SVMap,"X"); v = 1-pct(i,SVMap,"Y")
-                        SVCur.Position = UDim2.new(s,0,1-v,0); UpdateColor()
-                    end
-                end)
+                    if i.UserInputType==Enum.UserInputType.MouseButton1 then
+                        trackSV=true; s=pct(i,SVMap,"X"); v=1-pct(i,SVMap,"Y"); SVCur.Position=UDim2.new(s,0,1-v,0); UpdateColor() end end)
                 HueBar.InputBegan:Connect(function(i)
-                    if i.UserInputType == Enum.UserInputType.MouseButton1 then
-                        trackHue = true; h = pct(i,HueBar,"Y")
-                        HueCur.Position = UDim2.new(0.5,0,h,0); UpdateColor()
-                    end
-                end)
+                    if i.UserInputType==Enum.UserInputType.MouseButton1 then
+                        trackHue=true; h=pct(i,HueBar,"Y"); HueCur.Position=UDim2.new(0.5,0,h,0); UpdateColor() end end)
                 if AlphaTrack then
                     AlphaTrack.InputBegan:Connect(function(i)
-                        if i.UserInputType == Enum.UserInputType.MouseButton1 then
-                            trackAlpha = true; alpha = pct(i,AlphaTrack,"X")
-                            AlphaFill.Size = UDim2.new(alpha,0,1,0)
-                            AlphaCur.Position = UDim2.new(alpha,0,0.5,0); UpdateColor()
-                        end
-                    end)
+                        if i.UserInputType==Enum.UserInputType.MouseButton1 then
+                            trackAlpha=true; alpha=pct(i,AlphaTrack,"X")
+                            AlphaFill.Size=UDim2.new(alpha,0,1,0); AlphaCur.Position=UDim2.new(alpha,0,0.5,0); UpdateColor() end end)
                 end
                 UIS.InputEnded:Connect(function(i)
-                    if i.UserInputType == Enum.UserInputType.MouseButton1 then
-                        trackSV = false; trackHue = false; trackAlpha = false
-                    end
-                end)
+                    if i.UserInputType==Enum.UserInputType.MouseButton1 then trackSV=false; trackHue=false; trackAlpha=false end end)
                 UIS.InputChanged:Connect(function(i)
-                    if i.UserInputType ~= Enum.UserInputType.MouseMovement then return end
-                    if trackSV then
-                        s = pct(i,SVMap,"X"); v = 1-pct(i,SVMap,"Y")
-                        SVCur.Position = UDim2.new(s,0,1-v,0); UpdateColor()
-                    elseif trackHue then
-                        h = pct(i,HueBar,"Y")
-                        HueCur.Position = UDim2.new(0.5,0,h,0); UpdateColor()
-                    elseif trackAlpha then
-                        alpha = pct(i,AlphaTrack,"X")
-                        AlphaFill.Size = UDim2.new(alpha,0,1,0)
-                        AlphaCur.Position = UDim2.new(alpha,0,0.5,0); UpdateColor()
-                    end
-                end)
+                    if i.UserInputType~=Enum.UserInputType.MouseMovement then return end
+                    if trackSV then s=pct(i,SVMap,"X"); v=1-pct(i,SVMap,"Y"); SVCur.Position=UDim2.new(s,0,1-v,0); UpdateColor()
+                    elseif trackHue then h=pct(i,HueBar,"Y"); HueCur.Position=UDim2.new(0.5,0,h,0); UpdateColor()
+                    elseif trackAlpha then alpha=pct(i,AlphaTrack,"X"); AlphaFill.Size=UDim2.new(alpha,0,1,0); AlphaCur.Position=UDim2.new(alpha,0,0.5,0); UpdateColor() end end)
                 HexBox.FocusLost:Connect(function()
-                    local hex = HexBox.Text:gsub("[^%x]",""):sub(1,6)
-                    if #hex == 6 then
-                        local r = tonumber(hex:sub(1,2),16)/255
-                        local g = tonumber(hex:sub(3,4),16)/255
-                        local b = tonumber(hex:sub(5,6),16)/255
-                        h,s,v = Color3.new(r,g,b):ToHSV()
-                        SVCur.Position = UDim2.new(s,0,1-v,0)
-                        HueCur.Position = UDim2.new(0.5,0,h,0); UpdateColor()
-                    end
-                end)
+                    local hex=HexBox.Text:gsub("[^%x]",""):sub(1,6)
+                    if #hex==6 then
+                        local r=tonumber(hex:sub(1,2),16)/255; local g=tonumber(hex:sub(3,4),16)/255; local b=tonumber(hex:sub(5,6),16)/255
+                        h,s,v=Color3.new(r,g,b):ToHSV(); SVCur.Position=UDim2.new(s,0,1-v,0); HueCur.Position=UDim2.new(0.5,0,h,0); UpdateColor() end end)
                 CHeader.MouseButton1Click:Connect(function()
-                    isOpen = not isOpen
-                    local target = isOpen and rowH + (useAlpha and 160 or 140) or rowH
-                    TweenPlay(wrap, {Size = UDim2.new(1,0,0,target)}, 0.22, Enum.EasingStyle.Back)
-                end)
-
-                local api = { Value = color, Transparency = 1 - alpha, Default = default }
-                if key then Vesper.Options[key] = api end
-                function api:SetValue(c)
-                    h,s,v = c:ToHSV()
-                    SVCur.Position  = UDim2.new(s,0,1-v,0)
-                    HueCur.Position = UDim2.new(0.5,0,h,0); UpdateColor()
-                end
+                    isOpen=not isOpen
+                    local target=isOpen and rowH+(useAlpha and 160 or 140) or rowH
+                    TweenPlay(wrap,{Size=UDim2.new(1,0,0,target)},0.22,Enum.EasingStyle.Back) end)
+                local api={Value=color, Transparency=1-alpha, Default=default}
+                if key then Vesper.Options[key]=api end
+                function api:SetValue(c) h,s,v=c:ToHSV(); SVCur.Position=UDim2.new(s,0,1-v,0); HueCur.Position=UDim2.new(0.5,0,h,0); UpdateColor() end
                 function api:SetValueRGB(c) api:SetValue(c) end
-                function api:GetState()    return color end
-                function api:OnChanged(fn) _onChanged = fn end
+                function api:GetState() return color end
+                function api:OnChanged(fn) _onChanged=fn end
                 return api
             end
 
@@ -1644,31 +1426,49 @@ function Vesper:CreateWindow(cfg)
 
     -- ════════════════════════════════════════════════════════════
     --  BUBBLE  (floating quick-access icon)
-    --  FIX: logo enlarged to 66 px to fill the 72 px circle well
+    --  Uses a rounded inner clip-frame so the zoomed logo is
+    --  naturally cropped to the circle shape.
     -- ════════════════════════════════════════════════════════════
     local Bubble = Instance.new("Frame", Screen)
     Bubble.BackgroundColor3 = T.Background
     Bubble.AnchorPoint      = Vector2.new(0, 0)
     Bubble.Position         = UDim2.new(0, 20, 0, 20)
     Bubble.Size             = UDim2.new(0, 72, 0, 72)
-    AddCorner(Bubble, 100); AddStroke(Bubble, T.Accent, 2)
+    Bubble.ClipsDescendants = false
+    AddCorner(Bubble, 100)
+    local BubbleStroke = AddStroke(Bubble, T.Accent, 2)
     TC(Bubble, "BackgroundColor3", "Background")
-
-    local BubbleStroke = Bubble:FindFirstChildOfClass("UIStroke")
-    if BubbleStroke then TC(BubbleStroke, "Color", "Accent") end
+    TCS(BubbleStroke, "Accent")
 
     local BubbleGlow = Instance.new("ImageLabel", Bubble)
     BubbleGlow.BackgroundTransparency = 1
-    BubbleGlow.Position        = UDim2.new(0, -10, 0, -10)
-    BubbleGlow.Size            = UDim2.new(1, 20, 1, 20)
-    BubbleGlow.Image           = "rbxassetid://4996891970"
-    BubbleGlow.ImageColor3     = T.Accent
-    BubbleGlow.ImageTransparency = 0.65
-    BubbleGlow.ZIndex          = 0
+    BubbleGlow.Position         = UDim2.new(0, -10, 0, -10)
+    BubbleGlow.Size             = UDim2.new(1, 20, 1, 20)
+    BubbleGlow.Image            = "rbxassetid://4996891970"
+    BubbleGlow.ImageColor3      = T.Accent
+    BubbleGlow.ImageTransparency= 0.65
+    BubbleGlow.ZIndex           = 0
     TC(BubbleGlow, "ImageColor3", "Accent")
 
-    -- FIX: 66 px logo centred in the 72 px circle — properly fills it
-    MakeLogoImage(Bubble, 66, UDim2.new(0.5, 0, 0.5, 0), Vector2.new(0.5, 0.5), 2)
+    -- Inner clip circle: same size as Bubble, clips the oversized logo
+    local BubbleClip = Instance.new("Frame", Bubble)
+    BubbleClip.BackgroundTransparency = 1
+    BubbleClip.Size             = UDim2.new(1, 0, 1, 0)
+    BubbleClip.ClipsDescendants = true
+    AddCorner(BubbleClip, 100)
+
+    do
+        local cellPx   = 72
+        local imgPx    = math.ceil(cellPx / LOGO_FILL)
+        local overflow = imgPx - cellPx
+        local img = Instance.new("ImageLabel", BubbleClip)
+        img.BackgroundTransparency = 1
+        img.Size     = UDim2.new(0, imgPx, 0, imgPx)
+        img.Position = UDim2.new(0, -overflow / 2, 0, -overflow / 2)
+        img.Image    = LOGO_ASSET_ID
+        img.ScaleType= Enum.ScaleType.Fit
+        img.ZIndex   = 2
+    end
 
     local BubbleBtn = Instance.new("TextButton", Bubble)
     BubbleBtn.BackgroundTransparency = 1
@@ -1677,7 +1477,7 @@ function Vesper:CreateWindow(cfg)
     BubbleBtn.ZIndex = 10
     MakeDraggable(BubbleBtn, Bubble)
 
-    -- ── Toggle / Minimize ────────────────────────────────────────
+    -- Toggle / Minimize
     local minimized = false
     local function ToggleUI()
         minimized = not minimized
@@ -1725,57 +1525,35 @@ function Vesper:CreateWindow(cfg)
         })[ntype] or T.Accent
         local textH   = TextService:GetTextSize(content, 11, Enum.Font.Gotham, Vector2.new(246, 9999)).Y
         local targetH = math.max(64, textH + 52)
-
         local N = Instance.new("Frame", NotifHolder)
-        N.BackgroundColor3 = T.Surface
-        N.BorderSizePixel  = 0
-        N.Size             = UDim2.new(1, 0, 0, 0)
-        N.ClipsDescendants = false
+        N.BackgroundColor3 = T.Surface; N.BorderSizePixel = 0
+        N.Size = UDim2.new(1, 0, 0, 0); N.ClipsDescendants = false
         AddCorner(N, 8); AddStroke(N, accent2, 1, 0.5)
-
         local Bar2 = Instance.new("Frame", N)
         Bar2.BackgroundColor3 = accent2; Bar2.BorderSizePixel = 0
         Bar2.Size = UDim2.new(0, 3, 1, 0); AddCorner(Bar2, 4)
-
         local TL2 = Instance.new("Frame", N)
-        TL2.BackgroundColor3 = accent2
-        TL2.Size             = UDim2.new(1, 0, 0, 2)
-        TL2.BorderSizePixel  = 0
-
+        TL2.BackgroundColor3 = accent2; TL2.Size = UDim2.new(1, 0, 0, 2); TL2.BorderSizePixel = 0
         local NI = Instance.new("ImageLabel", N)
-        NI.BackgroundTransparency = 1
-        NI.Position   = UDim2.new(0, 12, 0, 12)
-        NI.Size       = UDim2.new(0, 18, 0, 18)
-        NI.Image      = Icon(icon2); NI.ImageColor3 = accent2
-
+        NI.BackgroundTransparency = 1; NI.Position = UDim2.new(0, 12, 0, 12)
+        NI.Size = UDim2.new(0, 18, 0, 18); NI.Image = Icon(icon2); NI.ImageColor3 = accent2
         local NT = Instance.new("TextLabel", N)
-        NT.BackgroundTransparency = 1
-        NT.Position       = UDim2.new(0, 36, 0, 10)
-        NT.Size           = UDim2.new(1, -44, 0, 16)
-        NT.Font           = Enum.Font.GothamBold
-        NT.Text           = title; NT.TextColor3 = T.Text; NT.TextSize = 13
+        NT.BackgroundTransparency = 1; NT.Position = UDim2.new(0, 36, 0, 10)
+        NT.Size = UDim2.new(1, -44, 0, 16); NT.Font = Enum.Font.GothamBold
+        NT.Text = title; NT.TextColor3 = T.Text; NT.TextSize = 13
         NT.TextXAlignment = Enum.TextXAlignment.Left
-
         local ND = Instance.new("TextLabel", N)
-        ND.BackgroundTransparency = 1
-        ND.Position       = UDim2.new(0, 36, 0, 30)
-        ND.Size           = UDim2.new(1, -44, 0, textH)
-        ND.Font           = Enum.Font.Gotham
-        ND.Text           = content; ND.TextColor3 = T.SubText; ND.TextSize = 11
-        ND.TextWrapped    = true; ND.TextXAlignment = Enum.TextXAlignment.Left
-
+        ND.BackgroundTransparency = 1; ND.Position = UDim2.new(0, 36, 0, 30)
+        ND.Size = UDim2.new(1, -44, 0, textH); ND.Font = Enum.Font.Gotham
+        ND.Text = content; ND.TextColor3 = T.SubText; ND.TextSize = 11
+        ND.TextWrapped = true; ND.TextXAlignment = Enum.TextXAlignment.Left
         local PBase = Instance.new("Frame", N)
-        PBase.BackgroundColor3 = T.Track
-        PBase.AnchorPoint      = Vector2.new(0, 1)
-        PBase.Position         = UDim2.new(0, 8, 1, -4)
-        PBase.Size             = UDim2.new(1, -16, 0, 2)
-        PBase.BorderSizePixel  = 0; AddCorner(PBase, 100)
-
+        PBase.BackgroundColor3 = T.Track; PBase.AnchorPoint = Vector2.new(0, 1)
+        PBase.Position = UDim2.new(0, 8, 1, -4); PBase.Size = UDim2.new(1, -16, 0, 2)
+        PBase.BorderSizePixel = 0; AddCorner(PBase, 100)
         local PFill = Instance.new("Frame", PBase)
-        PFill.BackgroundColor3 = accent2
-        PFill.BorderSizePixel  = 0
-        PFill.Size             = UDim2.new(1, 0, 1, 0); AddCorner(PFill, 100)
-
+        PFill.BackgroundColor3 = accent2; PFill.BorderSizePixel = 0
+        PFill.Size = UDim2.new(1, 0, 1, 0); AddCorner(PFill, 100)
         TweenPlay(N, {Size = UDim2.new(1, 0, 0, targetH)}, 0.3, Enum.EasingStyle.Back)
         if duration then
             TweenPlay(PFill, {Size = UDim2.new(0, 0, 1, 0)}, duration - 0.3, Enum.EasingStyle.Linear)
@@ -1794,114 +1572,82 @@ function Vesper:CreateWindow(cfg)
         local dtitle   = cfg2.Title   or "Dialog"
         local dcontent = cfg2.Content or ""
         local buttons  = cfg2.Buttons or {}
-
-        local Overlay = Instance.new("Frame", Screen)
+        local Overlay  = Instance.new("Frame", Screen)
         Overlay.BackgroundColor3    = Color3.new(0,0,0)
         Overlay.BackgroundTransparency = 0.4
         Overlay.Size = UDim2.new(1,0,1,0); Overlay.ZIndex = 50
-
         local Box = Instance.new("Frame", Overlay)
-        Box.BackgroundColor3 = T.Surface
-        Box.AnchorPoint      = Vector2.new(0.5,0.5)
-        Box.Position         = UDim2.new(0.5,0,0.5,0)
-        Box.Size             = UDim2.new(0,340,0,0)
-        Box.AutomaticSize    = Enum.AutomaticSize.Y
-        Box.ZIndex           = 51
+        Box.BackgroundColor3 = T.Surface; Box.AnchorPoint = Vector2.new(0.5,0.5)
+        Box.Position = UDim2.new(0.5,0,0.5,0); Box.Size = UDim2.new(0,340,0,0)
+        Box.AutomaticSize = Enum.AutomaticSize.Y; Box.ZIndex = 51
         AddCorner(Box, 10); AddStroke(Box, T.Border, 1.5)
         AddPad(Box, 20, 20, 20, 20); AddList(Box, 12)
-
         local BoxScale = Instance.new("UIScale", Box); BoxScale.Scale = 0.8
         TweenPlay(BoxScale, {Scale = 1}, 0.3, Enum.EasingStyle.Back)
-
         local DTitle = Instance.new("TextLabel", Box)
-        DTitle.BackgroundTransparency = 1
-        DTitle.Size           = UDim2.new(1,0,0,20)
-        DTitle.Font           = Enum.Font.GothamBold
-        DTitle.Text           = dtitle; DTitle.TextColor3 = T.Text; DTitle.TextSize = 15
+        DTitle.BackgroundTransparency = 1; DTitle.Size = UDim2.new(1,0,0,20)
+        DTitle.Font = Enum.Font.GothamBold; DTitle.Text = dtitle
+        DTitle.TextColor3 = T.Text; DTitle.TextSize = 15
         DTitle.TextXAlignment = Enum.TextXAlignment.Left
-
         local DContent = Instance.new("TextLabel", Box)
-        DContent.BackgroundTransparency = 1
-        DContent.Size           = UDim2.new(1,0,0,0)
-        DContent.AutomaticSize  = Enum.AutomaticSize.Y
-        DContent.Font           = Enum.Font.Gotham
-        DContent.Text           = dcontent; DContent.TextColor3 = T.SubText; DContent.TextSize = 12
+        DContent.BackgroundTransparency = 1; DContent.Size = UDim2.new(1,0,0,0)
+        DContent.AutomaticSize = Enum.AutomaticSize.Y; DContent.Font = Enum.Font.Gotham
+        DContent.Text = dcontent; DContent.TextColor3 = T.SubText; DContent.TextSize = 12
         DContent.TextXAlignment = Enum.TextXAlignment.Left; DContent.TextWrapped = true
-
         local BtnRow = Instance.new("Frame", Box)
-        BtnRow.BackgroundTransparency = 1
-        BtnRow.Size = UDim2.new(1,0,0,34)
+        BtnRow.BackgroundTransparency = 1; BtnRow.Size = UDim2.new(1,0,0,34)
         local BL2 = Instance.new("UIListLayout", BtnRow)
-        BL2.FillDirection         = Enum.FillDirection.Horizontal
-        BL2.Padding               = UDim.new(0,8)
-        BL2.HorizontalAlignment   = Enum.HorizontalAlignment.Right
-
+        BL2.FillDirection = Enum.FillDirection.Horizontal; BL2.Padding = UDim.new(0,8)
+        BL2.HorizontalAlignment = Enum.HorizontalAlignment.Right
         local function Close()
-            TweenPlay(BoxScale, {Scale=0.8}, 0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
-            TweenPlay(Overlay, {BackgroundTransparency=1}, 0.2)
+            TweenPlay(BoxScale,{Scale=0.8},0.2,Enum.EasingStyle.Quint,Enum.EasingDirection.In)
+            TweenPlay(Overlay,{BackgroundTransparency=1},0.2)
             task.delay(0.2, function() Overlay:Destroy() end)
         end
-
         for _, btnDef in ipairs(buttons) do
-            local isConfirm = btnDef.Title == "Confirm" or btnDef.Primary
+            local isConfirm = btnDef.Title=="Confirm" or btnDef.Primary
             local B = Instance.new("TextButton", BtnRow)
-            B.BackgroundColor3 = isConfirm and T.Accent or T.SurfaceHigh
-            B.BorderSizePixel  = 0
-            B.Size             = UDim2.new(0,0,1,0); B.AutomaticSize = Enum.AutomaticSize.X
-            B.Font             = Enum.Font.GothamBold; B.Text = btnDef.Title or "OK"
-            B.TextColor3       = T.Text; B.TextSize = 12; B.AutoButtonColor = false
-            AddCorner(B, 6); AddPad(B, 0,0,14,14)
+            B.BackgroundColor3 = isConfirm and T.Accent or T.SurfaceHigh; B.BorderSizePixel = 0
+            B.Size = UDim2.new(0,0,1,0); B.AutomaticSize = Enum.AutomaticSize.X
+            B.Font = Enum.Font.GothamBold; B.Text = btnDef.Title or "OK"
+            B.TextColor3 = T.Text; B.TextSize = 12; B.AutoButtonColor = false
+            AddCorner(B,6); AddPad(B,0,0,14,14)
             AddStroke(B, isConfirm and T.AccentDim or T.Border, 1)
             B.MouseButton1Click:Connect(function()
-                Close()
-                if btnDef.Callback then task.spawn(btnDef.Callback) end
-            end)
+                Close(); if btnDef.Callback then task.spawn(btnDef.Callback) end end)
         end
         if #buttons == 0 then
             local OkBtn = Instance.new("TextButton", BtnRow)
             OkBtn.BackgroundColor3 = T.Accent; OkBtn.BorderSizePixel = 0
             OkBtn.Size = UDim2.new(0,80,1,0); OkBtn.Font = Enum.Font.GothamBold
             OkBtn.Text = "OK"; OkBtn.TextColor3 = T.Text; OkBtn.TextSize = 12
-            OkBtn.AutoButtonColor = false; AddCorner(OkBtn, 6)
+            OkBtn.AutoButtonColor = false; AddCorner(OkBtn,6)
             OkBtn.MouseButton1Click:Connect(Close)
         end
     end
 
-    -- ════════════════════════════════════════════════════════════
-    --  SELECT TAB BY INDEX
-    -- ════════════════════════════════════════════════════════════
+    -- SelectTab
     function Window:SelectTab(index)
         local tab = Window._tabs[index]
         if tab then SwitchTab(tab) end
     end
 
-    -- ════════════════════════════════════════════════════════════
-    --  BUILD UI SECTION (settings helper)
-    -- ════════════════════════════════════════════════════════════
+    -- BuildUISection
     function Window:BuildUISection(tabAPI)
         local sec = tabAPI:CreateSection({ Title = "Interface", Icon = "lucide-layout" })
-
         sec:CreateToggle(nil, {
-            Title       = "Show Quick-Access Icon",
-            Description = "Floating icon when UI is hidden",
-            Default     = true,
-            Callback    = function(val) Bubble.Visible = val end,
+            Title="Show Quick-Access Icon", Description="Floating icon when UI is hidden",
+            Default=true, Callback=function(val) Bubble.Visible = val end,
         })
-
         sec:CreateDropdown("UITheme", {
-            Title       = "UI Theme",
-            Description = "Switch between available themes",
-            Values      = {"Dark", "Midnight", "Ember"},
-            Default     = "Midnight",
-            Callback    = function(themeName) Vesper:SetTheme(themeName) end,
+            Title="UI Theme", Description="Switch between available themes",
+            Values={"Dark","Midnight","Ember"}, Default="Midnight",
+            Callback=function(themeName) Vesper:SetTheme(themeName) end,
         })
-
         sec:CreateToggle("GlassMode", {
-            Title       = "Transparent Glass Background",
-            Description = "Semi-transparent glass-style effect",
-            Default     = false,
-            Callback    = function(enabled)
-                Main.BackgroundTransparency = enabled and 0.32 or 0
+            Title="Transparent Glass Background", Description="Semi-transparent glass-style effect",
+            Default=false, Callback=function(enabled)
+                Main.BackgroundTransparency    = enabled and 0.32 or 0
                 Sidebar.BackgroundTransparency = enabled and 0.35 or 0
                 local stroke = Main:FindFirstChildOfClass("UIStroke")
                 if stroke then
@@ -1910,35 +1656,23 @@ function Vesper:CreateWindow(cfg)
                 end
             end,
         })
-
         sec:CreateButton({
-            Title       = "Reset UI to Defaults",
-            Description = "Restores all toggles, sliders, themes, and values",
-            Callback    = function()
+            Title="Reset UI to Defaults", Description="Restores all toggles, sliders, themes, and values",
+            Callback=function()
                 for _, elem in pairs(Vesper.Options) do
-                    if elem and elem.SetValue and elem.Default ~= nil then
-                        elem:SetValue(elem.Default)
-                    end
+                    if elem and elem.SetValue and elem.Default ~= nil then elem:SetValue(elem.Default) end
                 end
                 Vesper:SetTheme("Midnight")
                 if Vesper.Options.GlassMode then Vesper.Options.GlassMode:SetValue(false) end
-                Vesper:Notify({
-                    Title    = "UI Reset Complete",
-                    Content  = "Every setting restored to default state.",
-                    Type     = "warning",
-                    Duration = 4,
-                })
+                Vesper:Notify({Title="UI Reset Complete",Content="Every setting restored to default state.",
+                    Type="warning",Duration=4})
             end,
         })
-
         sec:CreateKeybind(nil, {
-            Title           = "Toggle UI Hotkey",
-            Description     = "Key that shows / hides the window",
-            Default         = hotkey.Name,
-            Mode            = "Always",
-            ChangedCallback = function(newKey) hotkey = newKey end,
+            Title="Toggle UI Hotkey", Description="Key that shows / hides the window",
+            Default=hotkey.Name, Mode="Always",
+            ChangedCallback=function(newKey) hotkey = newKey end,
         })
-
         return sec
     end
 
@@ -1956,227 +1690,138 @@ end
 --  SAVE MANAGER
 -- ════════════════════════════════════════════════════════════════
 Vesper.SaveManager = (function()
-    local SM = {
-        _folder   = "VesperConfigs",
-        _ignored  = {},
-        _autoload = nil,
-        _library  = nil,
-    }
-
+    local SM = { _folder="VesperConfigs", _ignored={}, _autoload=nil, _library=nil }
     local function GetWriteFile()
-        if not writefile then warn("[SaveManager] writefile not available."); return false end
-        return true
-    end
-    local function EnsureFolder(path)
-        if not isfolder(path) then pcall(function() makefolder(path) end) end
-    end
-    local function ConfigPath(name) return SM._folder .. "/" .. name .. ".json" end
-    local function SerColor(c)    return {R = c.R, G = c.G, B = c.B} end
-    local function DeserColor(t)  return Color3.new(t.R, t.G, t.B) end
-
-    function SM:SetFolder(path)    self._folder = path; EnsureFolder(path) end
-    function SM:IgnoreKeys(list)   for _, k in ipairs(list) do self._ignored[k] = true end end
-    SM.IgnoreThemeSettings = function() end
-    function SM:SetIgnoreIndexes(list) for _, k in ipairs(list) do self._ignored[k] = true end end
-    function SM:SetLibrary(lib)    self._library = lib end
-
+        if not writefile then warn("[SaveManager] writefile not available."); return false end; return true end
+    local function EnsureFolder(p) if not isfolder(p) then pcall(function() makefolder(p) end) end end
+    local function ConfigPath(n) return SM._folder.."/"..n..".json" end
+    local function SerColor(c)   return {R=c.R,G=c.G,B=c.B} end
+    local function DeserColor(t) return Color3.new(t.R,t.G,t.B) end
+    function SM:SetFolder(p)    self._folder=p; EnsureFolder(p) end
+    function SM:IgnoreKeys(l)   for _,k in ipairs(l) do self._ignored[k]=true end end
+    SM.IgnoreThemeSettings=function() end
+    function SM:SetIgnoreIndexes(l) for _,k in ipairs(l) do self._ignored[k]=true end end
+    function SM:SetLibrary(lib) self._library=lib end
     function SM:_Collect()
-        local data = {}
-        for key, elem in pairs(Vesper.Options) do
+        local data={}
+        for key,elem in pairs(Vesper.Options) do
             if not (self._ignored and self._ignored[key]) then
                 local val
-                if elem.GetState then
-                    local ok, r = pcall(function() return elem:GetState() end)
-                    val = ok and r or elem.Value
-                else val = elem.Value end
-                local t = typeof(val)
-                if     t == "boolean"  then data[key] = val
-                elseif t == "number"   then data[key] = val
-                elseif t == "string"   then data[key] = val
-                elseif t == "table"    then data[key] = val
-                elseif t == "Color3"   then data[key] = SerColor(val)
-                elseif t == "EnumItem" then data[key] = val.Name end
+                if elem.GetState then local ok,r=pcall(function() return elem:GetState() end); val=ok and r or elem.Value
+                else val=elem.Value end
+                local t=typeof(val)
+                if t=="boolean" or t=="number" or t=="string" then data[key]=val
+                elseif t=="table"   then data[key]=val
+                elseif t=="Color3"  then data[key]=SerColor(val)
+                elseif t=="EnumItem" then data[key]=val.Name end
             end
-        end
-        return data
+        end; return data
     end
-
     function SM:_Apply(data)
-        for key, val in pairs(data) do
-            local elem = Vesper.Options[key]
+        for key,val in pairs(data) do
+            local elem=Vesper.Options[key]
             if elem and elem.SetValue then
-                if type(val) == "table" and val.R ~= nil then elem:SetValue(DeserColor(val))
-                else elem:SetValue(val) end
-            end
-        end
+                if type(val)=="table" and val.R~=nil then elem:SetValue(DeserColor(val))
+                else elem:SetValue(val) end end end
     end
-
     function SM:Save(name)
-        if not GetWriteFile() then return end
-        EnsureFolder(self._folder)
-        local ok, err = pcall(function()
-            writefile(ConfigPath(name),
-                game:GetService("HttpService"):JSONEncode(self:_Collect()))
-        end)
-        if ok then
-            if Vesper._window then
-                Vesper._window:Notify({Title="Config Saved", Content='Saved as "'..name..'"', Type="success", Duration=3})
-            end
-        else warn("[SaveManager] Save failed:", err) end
+        if not GetWriteFile() then return end; EnsureFolder(self._folder)
+        local ok,err=pcall(function()
+            writefile(ConfigPath(name), game:GetService("HttpService"):JSONEncode(self:_Collect())) end)
+        if ok then if Vesper._window then
+            Vesper._window:Notify({Title="Config Saved",Content='Saved as "'..name..'"',Type="success",Duration=3}) end
+        else warn("[SaveManager] Save failed:",err) end
     end
-
     function SM:Load(name)
         if not GetWriteFile() then return end
-        local path = ConfigPath(name)
+        local path=ConfigPath(name)
         if not isfile(path) then
-            if Vesper._window then
-                Vesper._window:Notify({Title="Config Not Found", Content='"'..name..'" does not exist.', Type="error", Duration=4})
-            end; return
-        end
-        local ok, data = pcall(function()
-            return game:GetService("HttpService"):JSONDecode(readfile(path))
-        end)
-        if ok and data then
-            self:_Apply(data)
-            if Vesper._window then
-                Vesper._window:Notify({Title="Config Loaded", Content='Loaded "'..name..'"', Type="success", Duration=3})
-            end
-        else warn("[SaveManager] Load failed:", data) end
+            if Vesper._window then Vesper._window:Notify({Title="Config Not Found",
+                Content='"'..name..'" does not exist.',Type="error",Duration=4}) end; return end
+        local ok,data=pcall(function() return game:GetService("HttpService"):JSONDecode(readfile(path)) end)
+        if ok and data then self:_Apply(data)
+            if Vesper._window then Vesper._window:Notify({Title="Config Loaded",
+                Content='Loaded "'..name..'"',Type="success",Duration=3}) end
+        else warn("[SaveManager] Load failed:",data) end
     end
-
     function SM:Delete(name)
         if not GetWriteFile() then return end
-        local path = ConfigPath(name)
-        if isfile(path) then pcall(function() delfile(path) end) end
-    end
-
+        local path=ConfigPath(name); if isfile(path) then pcall(function() delfile(path) end) end end
     function SM:SetAutoload(name)
-        self._autoload = name; EnsureFolder(self._folder)
-        pcall(function() writefile(self._folder .. "/_autoload.txt", name) end)
-        if Vesper._window then
-            Vesper._window:Notify({Title="Autoload Set", Content='"'..name..'" will load on next inject.', Duration=3})
-        end
-    end
-
+        self._autoload=name; EnsureFolder(self._folder)
+        pcall(function() writefile(self._folder.."/_autoload.txt",name) end)
+        if Vesper._window then Vesper._window:Notify({Title="Autoload Set",
+            Content='"'..name..'" will load on next inject.',Duration=3}) end end
     function SM:LoadAutoloadConfig()
         if self._autoload then self:Load(self._autoload); return end
-        local path = self._folder .. "/_autoload.txt"
+        local path=self._folder.."/_autoload.txt"
         if not GetWriteFile() then return end
         if isfile(path) then
-            local ok, name = pcall(function() return readfile(path) end)
-            if ok and name and name ~= "" then
-                self._autoload = name
-                task.delay(0.5, function() self:Load(name) end)
-            end
-        end
-    end
-
+            local ok,name=pcall(function() return readfile(path) end)
+            if ok and name and name~="" then
+                self._autoload=name; task.delay(0.5,function() self:Load(name) end) end end end
     function SM:GetConfigs()
-        if not GetWriteFile() then return {} end
-        EnsureFolder(self._folder)
-        local list = {}
+        if not GetWriteFile() then return {} end; EnsureFolder(self._folder)
+        local list={}
         pcall(function()
-            for _, f in ipairs(listfiles(self._folder)) do
-                local name = f:match("([^/\\]+)%.json$")
-                if name then table.insert(list, name) end
-            end
-        end)
-        return list
-    end
-
+            for _,f in ipairs(listfiles(self._folder)) do
+                local name=f:match("([^/\\]+)%.json$"); if name then table.insert(list,name) end end end)
+        return list end
     function SM:BuildConfigSection(tabAPI)
-        local sec   = tabAPI:CreateSection({ Title = "Configuration", Icon = "lucide-save" })
-        local self2 = self
-
-        local nameInput = sec:CreateTextBox("_cfgName", {
-            Title       = "Config Name",
-            Placeholder = "my-config",
-            Default     = "default",
-            Finished    = false,
-        })
-        sec:CreateButton({ Title="Save Config",    Description="Saves all current values",
-            Callback=function() local n=nameInput:GetState(); if n and n~="" then self2:Save(n) end end })
-        sec:CreateButton({ Title="Load Config",    Description="Loads the named config",
-            Callback=function() local n=nameInput:GetState(); if n and n~="" then self2:Load(n) end end })
-        sec:CreateButton({ Title="Set as Autoload", Description="Automatically loads on next inject",
-            Callback=function() local n=nameInput:GetState(); if n and n~="" then self2:SetAutoload(n) end end })
-        sec:CreateButton({ Title="Clear Autoload",
-            Callback=function()
-                self2._autoload = nil
-                pcall(function() delfile(self2._folder.."/_autoload.txt") end)
-                if Vesper._window then Vesper._window:Notify({Title="Autoload Cleared",Duration=2}) end
-            end })
-
+        local sec=tabAPI:CreateSection({Title="Configuration",Icon="lucide-save"}); local self2=self
+        local nameInput=sec:CreateTextBox("_cfgName",{Title="Config Name",Placeholder="my-config",Default="default",Finished=false})
+        sec:CreateButton({Title="Save Config",Description="Saves all current values",
+            Callback=function() local n=nameInput:GetState(); if n and n~="" then self2:Save(n) end end})
+        sec:CreateButton({Title="Load Config",Description="Loads the named config",
+            Callback=function() local n=nameInput:GetState(); if n and n~="" then self2:Load(n) end end})
+        sec:CreateButton({Title="Set as Autoload",Description="Automatically loads on next inject",
+            Callback=function() local n=nameInput:GetState(); if n and n~="" then self2:SetAutoload(n) end end})
+        sec:CreateButton({Title="Clear Autoload",Callback=function()
+            self2._autoload=nil; pcall(function() delfile(self2._folder.."/_autoload.txt") end)
+            if Vesper._window then Vesper._window:Notify({Title="Autoload Cleared",Duration=2}) end end})
         local function GetConfigs() return self2:GetConfigs() end
-        local configDrop = sec:CreateDropdown("_cfgDrop", {
-            Title    = "Saved Configs",
-            Values   = GetConfigs(),
-            Multi    = false,
-            Callback = function(v) nameInput:SetValue(v) end,
-        })
-        sec:CreateButton({ Title="Refresh List",
-            Callback=function() configDrop:Refresh(GetConfigs()) end })
-        sec:CreateButton({ Title="Delete Config", Description="Permanently deletes the named config",
+        local configDrop=sec:CreateDropdown("_cfgDrop",{Title="Saved Configs",Values=GetConfigs(),
+            Multi=false, Callback=function(v) nameInput:SetValue(v) end})
+        sec:CreateButton({Title="Refresh List",Callback=function() configDrop:Refresh(GetConfigs()) end})
+        sec:CreateButton({Title="Delete Config",Description="Permanently deletes the named config",
             Callback=function()
-                local n = nameInput:GetState()
-                if n and n ~= "" then
-                    self2:Delete(n); configDrop:Refresh(GetConfigs())
-                    if Vesper._window then
-                        Vesper._window:Notify({Title="Config Deleted",Content='"'..n..'" removed.',Type="warning",Duration=3})
-                    end
-                end
-            end })
+                local n=nameInput:GetState()
+                if n and n~="" then self2:Delete(n); configDrop:Refresh(GetConfigs())
+                    if Vesper._window then Vesper._window:Notify({Title="Config Deleted",
+                        Content='"'..n..'" removed.',Type="warning",Duration=3}) end end end})
     end
-
     return SM
 end)()
 
--- ════════════════════════════════════════════════════════════════
 return Vesper
--- ════════════════════════════════════════════════════════════════
 --[[
-╔══════════════════════════════════════════════════════════════════╗
-║                    FULL USAGE EXAMPLE                           ║
-╚══════════════════════════════════════════════════════════════════╝
-
-local Vesper = loadstring(game:HttpGet("YOUR_RAW_URL"))()
+USAGE:
+local Vesper      = loadstring(game:HttpGet("YOUR_RAW_URL"))()
 local SaveManager = Vesper.SaveManager
 
 local Window = Vesper:CreateWindow({
-    Title       = 'Vesper Hub <font color="rgb(139,92,246)">v3</font>',
-    Subtitle    = "by you",
+    Title = 'Vesper Hub <font color="rgb(139,92,246)">v3</font>',
+    Subtitle = "by you",
     MinimizeKey = Enum.KeyCode.RightControl,
-    Tag         = "Premium Build",
+    Tag = "Premium Build",
 })
 
 local Tabs = {
-    Main     = Window:AddTab({ Title = "Main",     Icon = "lucide-home"     }),
-    Combat   = Window:AddTab({ Title = "Combat",   Icon = "lucide-swords"   }),
-    Settings = Window:AddTab({ Title = "Settings", Icon = "lucide-settings" }),
+    Main     = Window:AddTab({ Title="Main",     Icon="lucide-home"     }),
+    Combat   = Window:AddTab({ Title="Combat",   Icon="lucide-swords"   }),
+    Settings = Window:AddTab({ Title="Settings", Icon="lucide-settings" }),
 }
 
-local General = Tabs.Main:CreateSection({ Title = "General", Icon = "lucide-zap" })
-
-General:CreateParagraph({ Title = "Welcome", Content = "Vesper v3.2 — all bugs fixed." })
-
-local SpeedToggle = General:CreateToggle("SpeedHack", {
-    Title = "Speed Hack", Description = "Enables boosted walk speed",
-    Default = false, Callback = function(state) end,
-})
-
-local SpeedSlider = General:CreateSlider("SpeedValue", {
-    Title = "Walk Speed", Default = 16, Min = 16, Max = 500,
-    Rounding = 0, Suffix = " sp", Callback = function(value) end,
-})
-
-General:CreateButton({ Title = "Reset Speed", Callback = function() SpeedSlider:SetValue(16) end })
+local General = Tabs.Main:CreateSection({ Title="General", Icon="lucide-zap" })
+General:CreateParagraph({ Title="Welcome", Content="Vesper v3.3" })
+General:CreateToggle("SpeedHack",{ Title="Speed Hack", Default=false, Callback=function(s) end })
+General:CreateSlider("SpeedValue",{ Title="Walk Speed", Default=16, Min=16, Max=500, Suffix=" sp" })
 
 SaveManager:SetFolder("VesperHub/MyGame")
-SaveManager:SetIgnoreIndexes({ "_cfgName", "_cfgDrop" })
+SaveManager:SetIgnoreIndexes({"_cfgName","_cfgDrop"})
 SaveManager:BuildConfigSection(Tabs.Settings)
 Window:BuildUISection(Tabs.Settings)
-
 Window:SelectTab(1)
-Vesper:Notify({ Title="Vesper Loaded", Content="Script injected.", Type="success", Duration=6 })
+Vesper:Notify({Title="Vesper Loaded",Content="Injected.",Type="success",Duration=6})
 SaveManager:LoadAutoloadConfig()
 ]]
