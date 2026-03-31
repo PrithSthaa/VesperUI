@@ -1466,7 +1466,7 @@ function Vesper:CreateWindow(cfg)
         img.Size     = UDim2.new(0, imgPx, 0, imgPx)
         img.Position = UDim2.new(0, -overflow / 2, 0, -overflow / 2)
         img.Image    = LOGO_ASSET_ID
-        img.ScaleType= Enum.ScaleType.Fit
+        img.ScaleType= Enum.ScaleType.crop
         img.ZIndex   = 2
     end
 
