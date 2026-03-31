@@ -9,7 +9,7 @@
 --     RefreshTheme updates ALL borders, rows, panels, and inputs when
 --     the theme changes — not just background colours.
 -- ================================================================
-local LOGO_ASSET_ID = "rbxassetid://114284401999970"
+local LOGO_ASSET_ID = "rbxassetid://71064306381045"
 
 -- The logo image asset has built-in transparent padding. The actual
 -- visible artwork occupies roughly 62 % of the canvas. To make it
