@@ -1463,11 +1463,11 @@ function Vesper:CreateWindow(cfg)
         local overflow = imgPx - cellPx
         local img = Instance.new("ImageLabel", BubbleClip)
         img.BackgroundTransparency = 1
-        img.Size = UDim2.new(1.2, 0, 1.2, 0) -- slightly bigger so it fills fully
-        img.Position = UDim2.new(-0.1, 0, -0.1, 0) -- center it
-        img.Image = LOGO_ASSET_ID
-        img.ScaleType = Enum.ScaleType.Crop
-        img.ZIndex = 2
+        img.Size     = UDim2.new(0, imgPx, 0, imgPx)
+        img.Position = UDim2.new(0, -overflow / 2, 0, -overflow / 2)
+        img.Image    = LOGO_ASSET_ID
+        img.ScaleType= Enum.ScaleType.Fit
+        img.ZIndex   = 2
     end
 
     local BubbleBtn = Instance.new("TextButton", Bubble)
