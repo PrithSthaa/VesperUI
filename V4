@@ -7,6 +7,11 @@
 --   • Added missing `return Window` at end of CreateWindow
 --   • Logo sizes enlarged and properly centred in both containers
 --   • SwitchTab / hover states use live T → correct on theme change
+--   • [NEW] Tab Btn/Lbl/Sub/Bar/Ico added to _tracked
+--   • [NEW] RefreshTheme iterates Window._tabs → instant colour apply
+--   • [NEW] MouseEnter uses T.SidebarHover (was hardcoded RGB)
+--   • [NEW] Sidebar logo uses UDim2 scale so it stays centred
+--   • [NEW] Bubble logo enlarged to 66 px for proper circle fill
 -- ================================================================
 local LOGO_ASSET_ID = "rbxassetid://72372201156015"
 
@@ -94,7 +99,7 @@ end
 local function Icon(name) return Icons[name] or Icons["lucide-box"] or "" end
 
 -- ────────────────────────────────────────────────────────────────
--- LOGO BUILDER  (fills container cleanly)
+-- LOGO BUILDER
 -- ────────────────────────────────────────────────────────────────
 local function MakeLogoImage(parent, size, position, anchor, zindex)
     local img = Instance.new("ImageLabel")
@@ -171,12 +176,7 @@ end
 --  CREATE WINDOW
 -- ════════════════════════════════════════════════════════════════
 function Vesper:CreateWindow(cfg)
-    -- ┌─────────────────────────────────────────────────────────┐
-    -- │  FIX 1: T is a live proxy — always reads Vesper.Theme   │
-    -- │  This means every T.Accent, T.Background etc. in hover  │
-    -- │  callbacks, SwitchTab, etc. reflects the current theme  │
-    -- │  automatically without extra plumbing.                  │
-    -- └─────────────────────────────────────────────────────────┘
+    -- Live proxy: every T.X read always reflects Vesper.Theme.X
     local T = setmetatable({}, {
         __index    = function(_, k) return Vesper.Theme[k] end,
         __newindex = function() end,
@@ -254,11 +254,6 @@ function Vesper:CreateWindow(cfg)
     SideLine.Size             = UDim2.new(0, 1, 1, 0)
     SideLine.BorderSizePixel  = 0
 
-    -- ┌─────────────────────────────────────────────────────────────┐
-    -- │  FIX 2: Single Window declaration — eliminates the bug      │
-    -- │  where the second `local Window = {}` overwrote the first,  │
-    -- │  destroying RefreshTheme and tab state.                     │
-    -- └─────────────────────────────────────────────────────────────┘
     local Window       = {}
     Window._active     = nil
     Window._tabs       = {}
@@ -266,19 +261,18 @@ function Vesper:CreateWindow(cfg)
     Window.Sidebar     = Sidebar
     Vesper._window     = Window
 
-    -- ┌─────────────────────────────────────────────────────────────┐
-    -- │  FIX 3: Comprehensive RefreshTheme                          │
-    -- │  We track every statically-coloured element created during  │
-    -- │  window setup and sweep them all on theme change.           │
-    -- └─────────────────────────────────────────────────────────────┘
     local _tracked = {}  -- { obj, prop, themeKey }
 
-    -- Helper: set a colour AND register the element for live refresh
     local function TC(obj, prop, themeKey)
         obj[prop] = Vesper.Theme[themeKey]
         table.insert(_tracked, { obj = obj, prop = prop, key = themeKey })
     end
 
+    -- ────────────────────────────────────────────────────────────
+    -- FIX: RefreshTheme now also iterates Window._tabs to update
+    -- tab buttons, bars, labels, and icons immediately — no hover
+    -- required. Active tab gets SidebarHover; others get Sidebar.
+    -- ────────────────────────────────────────────────────────────
     function Window:RefreshTheme()
         -- 1. Sweep every registered element
         for _, item in ipairs(_tracked) do
@@ -286,47 +280,77 @@ function Vesper:CreateWindow(cfg)
                 item.obj[item.prop] = Vesper.Theme[item.key]
             end
         end
-        -- 2. Stroke on Main (stored separately)
+        -- 2. Stroke on Main
         MainStroke.Color = Vesper.Theme.Border
         -- 3. Window ambient glow
         if WinGlow then WinGlow.ImageColor3 = Vesper.Theme.Accent end
-        -- 4. Re-tint the active tab indicator so it snaps to new accent
-        if Window._active then
-            Window._active._bar.BackgroundColor3 = Vesper.Theme.Accent
+        -- 4. Update every tab button/bar/label/icon directly
+        for _, tab in ipairs(Window._tabs) do
+            if tab._btn and tab._btn.Parent then
+                local isActive = (Window._active == tab)
+                tab._btn.BackgroundColor3 = isActive and Vesper.Theme.SidebarHover or Vesper.Theme.Sidebar
+                tab._bar.BackgroundColor3 = Vesper.Theme.Accent
+                tab._lbl.TextColor3       = isActive and Vesper.Theme.Text    or Vesper.Theme.SubText
+                tab._sub.TextColor3       = isActive and Vesper.Theme.SubText or Vesper.Theme.Muted
+            end
+            -- refresh icon colour if present
+            if tab._ico and tab._ico.Parent then
+                tab._ico.ImageColor3 = isActive and Vesper.Theme.Accent or Vesper.Theme.Muted
+            end
         end
     end
 
-    -- Now apply initial colours to the elements we already created
+    -- Apply initial colours
     TC(Main,     "BackgroundColor3", "Background")
     TC(Sidebar,  "BackgroundColor3", "Sidebar")
     TC(SideFlat, "BackgroundColor3", "Sidebar")
     TC(SideLine, "BackgroundColor3", "Border")
 
-    -- ── Logo (sidebar) ────────────────────────────────────────────
-    -- FIX 4: Larger container (130px) + larger logo (108px) so the
-    -- image visually fills the space; text positioned accordingly.
+    -- ── Logo (sidebar) ───────────────────────────────────────────
+    -- FIX: LogoFrame split into two sub-frames so the logo and the
+    -- text are each independently centred, with no hard pixel math
+    -- that breaks at different sidebar widths.
     local LogoFrame = Instance.new("Frame", Sidebar)
     LogoFrame.BackgroundTransparency = 1
     LogoFrame.Size                   = UDim2.new(1, 0, 0, 130)
 
-    -- Logo image: 108 px, anchored left-centre at x=10
-    MakeLogoImage(LogoFrame, 108, UDim2.new(0, 10, 0.5, 0), Vector2.new(0, 0.5), 2)
+    -- Left cell: logo centred in a 100 px wide area
+    local LogoCell = Instance.new("Frame", LogoFrame)
+    LogoCell.BackgroundTransparency = 1
+    LogoCell.Position               = UDim2.new(0, 0, 0, 0)
+    LogoCell.Size                   = UDim2.new(0, 100, 1, 0)
 
-    local LogoName = Instance.new("TextLabel", LogoFrame)
+    MakeLogoImage(
+        LogoCell,
+        86,                               -- size: fills the 100 px cell nicely
+        UDim2.new(0.5, 0, 0.5, 0),       -- dead-centre of the cell
+        Vector2.new(0.5, 0.5),           -- anchor at image centre
+        2
+    )
+
+    -- Right cell: title + tag stacked vertically, centred
+    local TextCell = Instance.new("Frame", LogoFrame)
+    TextCell.BackgroundTransparency = 1
+    TextCell.Position               = UDim2.new(0, 104, 0, 0)
+    TextCell.Size                   = UDim2.new(1, -108, 1, 0)
+
+    local LogoName = Instance.new("TextLabel", TextCell)
     LogoName.BackgroundTransparency = 1
-    LogoName.Position       = UDim2.new(0, 126, 0.5, -20)
-    LogoName.Size           = UDim2.new(1, -130, 0, 26)
+    LogoName.AnchorPoint    = Vector2.new(0, 0.5)
+    LogoName.Position       = UDim2.new(0, 0, 0.5, -12)
+    LogoName.Size           = UDim2.new(1, 0, 0, 22)
     LogoName.Font           = Enum.Font.GothamBold
     LogoName.Text           = "Vesper"
     LogoName.TextColor3     = T.Text
-    LogoName.TextSize       = 19
+    LogoName.TextSize       = 18
     LogoName.TextXAlignment = Enum.TextXAlignment.Left
     TC(LogoName, "TextColor3", "Text")
 
-    local LogoTag = Instance.new("TextLabel", LogoFrame)
+    local LogoTag = Instance.new("TextLabel", TextCell)
     LogoTag.BackgroundTransparency = 1
-    LogoTag.Position        = UDim2.new(0, 126, 0.5, 10)
-    LogoTag.Size            = UDim2.new(1, -130, 0, 14)
+    LogoTag.AnchorPoint     = Vector2.new(0, 0.5)
+    LogoTag.Position        = UDim2.new(0, 0, 0.5, 12)
+    LogoTag.Size            = UDim2.new(1, 0, 0, 14)
     LogoTag.Font            = Enum.Font.Gotham
     LogoTag.Text            = tag
     LogoTag.TextColor3      = T.Accent
@@ -409,7 +433,6 @@ function Vesper:CreateWindow(cfg)
     local CloseBtn    = MakeDot(T.Negative, 14)
     local MinimizeBtn = MakeDot(T.Warning,  32)
 
-    -- Update dots on theme change
     table.insert(_tracked, { obj = CloseBtn,    prop = "BackgroundColor3", key = "Negative" })
     table.insert(_tracked, { obj = MinimizeBtn, prop = "BackgroundColor3", key = "Warning"  })
 
@@ -434,11 +457,11 @@ function Vesper:CreateWindow(cfg)
         if Window._active == tab then return end
         if Window._active then
             local old = Window._active
-            -- T.Sidebar / T.SubText / T.Muted all read live from proxy
             TweenPlay(old._btn, {BackgroundColor3 = T.Sidebar},  0.18)
             TweenPlay(old._bar, {BackgroundTransparency = 1, Size = UDim2.new(0, 2, 0.5, 0)}, 0.18)
             old._lbl.TextColor3 = T.SubText
             old._sub.TextColor3 = T.Muted
+            if old._ico then old._ico.ImageColor3 = T.Muted end
             old._page.Visible   = false
         end
         Window._active = tab
@@ -446,6 +469,7 @@ function Vesper:CreateWindow(cfg)
         TweenPlay(tab._bar, {BackgroundTransparency = 0, Size = UDim2.new(0, 3, 0.65, 0)}, 0.22, Enum.EasingStyle.Back)
         tab._lbl.TextColor3 = T.Text
         tab._sub.TextColor3 = T.SubText
+        if tab._ico then tab._ico.ImageColor3 = T.Accent end
         tab._page.Visible   = true
     end
 
@@ -465,9 +489,11 @@ function Vesper:CreateWindow(cfg)
         Btn.ClipsDescendants = false
         AddCorner(Btn, 7)
 
+        -- FIX: use T.SidebarHover instead of the hardcoded RGB value
+        -- so hover colour always matches the current theme immediately.
         Btn.MouseEnter:Connect(function()
             if Window._active and Window._active._btn == Btn then return end
-            TweenPlay(Btn, {BackgroundColor3 = Color3.fromRGB(22, 22, 28)}, 0.12)
+            TweenPlay(Btn, {BackgroundColor3 = T.SidebarHover}, 0.12)
         end)
         Btn.MouseLeave:Connect(function()
             if Window._active and Window._active._btn == Btn then return end
@@ -483,6 +509,7 @@ function Vesper:CreateWindow(cfg)
         AddCorner(Bar, 4)
 
         local xOff = tabIcon and 34 or 10
+        local IcoRef = nil
         if tabIcon then
             local Ico = Instance.new("ImageLabel", Btn)
             Ico.BackgroundTransparency = 1
@@ -491,6 +518,7 @@ function Vesper:CreateWindow(cfg)
             Ico.Image       = Icon(tabIcon)
             Ico.ImageColor3 = T.Muted
             Ico.ZIndex      = Btn.ZIndex + 1
+            IcoRef = Ico
         end
 
         local Lbl = Instance.new("TextLabel", Btn)
@@ -562,6 +590,7 @@ function Vesper:CreateWindow(cfg)
         local tabObj = {
             _btn  = Btn,   _bar  = Bar,
             _lbl  = Lbl,   _sub  = Sub,
+            _ico  = IcoRef,          -- FIX: store icon reference for RefreshTheme
             _page = Page,  _left = LeftCol,
             _right = RightCol, _col = true,
         }
@@ -1615,17 +1644,16 @@ function Vesper:CreateWindow(cfg)
 
     -- ════════════════════════════════════════════════════════════
     --  BUBBLE  (floating quick-access icon)
-    --  FIX 5: Logo enlarged to 60px inside 72px bubble container
+    --  FIX: logo enlarged to 66 px to fill the 72 px circle well
     -- ════════════════════════════════════════════════════════════
     local Bubble = Instance.new("Frame", Screen)
     Bubble.BackgroundColor3 = T.Background
     Bubble.AnchorPoint      = Vector2.new(0, 0)
     Bubble.Position         = UDim2.new(0, 20, 0, 20)
-    Bubble.Size             = UDim2.new(0, 72, 0, 72)   -- slightly larger container
+    Bubble.Size             = UDim2.new(0, 72, 0, 72)
     AddCorner(Bubble, 100); AddStroke(Bubble, T.Accent, 2)
     TC(Bubble, "BackgroundColor3", "Background")
 
-    -- Register the Bubble stroke for theme refreshes
     local BubbleStroke = Bubble:FindFirstChildOfClass("UIStroke")
     if BubbleStroke then TC(BubbleStroke, "Color", "Accent") end
 
@@ -1639,8 +1667,8 @@ function Vesper:CreateWindow(cfg)
     BubbleGlow.ZIndex          = 0
     TC(BubbleGlow, "ImageColor3", "Accent")
 
-    -- 60px logo centred inside 72px bubble
-    MakeLogoImage(Bubble, 60, UDim2.new(0.5, 0, 0.5, 0), Vector2.new(0.5, 0.5), 2)
+    -- FIX: 66 px logo centred in the 72 px circle — properly fills it
+    MakeLogoImage(Bubble, 66, UDim2.new(0.5, 0, 0.5, 0), Vector2.new(0.5, 0.5), 2)
 
     local BubbleBtn = Instance.new("TextButton", Bubble)
     BubbleBtn.BackgroundTransparency = 1
@@ -1914,11 +1942,6 @@ function Vesper:CreateWindow(cfg)
         return sec
     end
 
-    -- ════════════════════════════════════════════════════════════
-    --  FIX 6: RETURN WINDOW
-    --  The original script was missing this line, meaning
-    --  `local Window = Vesper:CreateWindow(...)` returned nil.
-    -- ════════════════════════════════════════════════════════════
     return Window
 end -- CreateWindow
 
@@ -2119,8 +2142,6 @@ return Vesper
 local Vesper = loadstring(game:HttpGet("YOUR_RAW_URL"))()
 local SaveManager = Vesper.SaveManager
 
--- Vesper:SetTheme("Dark")   -- Dark / Midnight / Ember
-
 local Window = Vesper:CreateWindow({
     Title       = 'Vesper Hub <font color="rgb(139,92,246)">v3</font>',
     Subtitle    = "by you",
@@ -2134,34 +2155,22 @@ local Tabs = {
     Settings = Window:AddTab({ Title = "Settings", Icon = "lucide-settings" }),
 }
 
--- ── Main tab ───────────────────────────────────────────────────
 local General = Tabs.Main:CreateSection({ Title = "General", Icon = "lucide-zap" })
 
-General:CreateParagraph({
-    Title   = "Welcome",
-    Content = "This is Vesper v3.2.\nAll bugs fixed.",
-})
+General:CreateParagraph({ Title = "Welcome", Content = "Vesper v3.2 — all bugs fixed." })
 
 local SpeedToggle = General:CreateToggle("SpeedHack", {
-    Title       = "Speed Hack",
-    Description = "Enables boosted walk speed",
-    Default     = false,
-    Callback    = function(state) end,
+    Title = "Speed Hack", Description = "Enables boosted walk speed",
+    Default = false, Callback = function(state) end,
 })
 
 local SpeedSlider = General:CreateSlider("SpeedValue", {
-    Title    = "Walk Speed",
-    Default  = 16, Min = 16, Max = 500,
-    Rounding = 0,  Suffix = " sp",
-    Callback = function(value) end,
+    Title = "Walk Speed", Default = 16, Min = 16, Max = 500,
+    Rounding = 0, Suffix = " sp", Callback = function(value) end,
 })
 
-General:CreateButton({
-    Title    = "Reset Speed",
-    Callback = function() SpeedSlider:SetValue(16) end,
-})
+General:CreateButton({ Title = "Reset Speed", Callback = function() SpeedSlider:SetValue(16) end })
 
--- ── Settings tab ───────────────────────────────────────────────
 SaveManager:SetFolder("VesperHub/MyGame")
 SaveManager:SetIgnoreIndexes({ "_cfgName", "_cfgDrop" })
 SaveManager:BuildConfigSection(Tabs.Settings)
