@@ -10,7 +10,7 @@
 --   • Sidebar logo text size increased (18 → 22).
 --   • Transparent Background (GlassMode) defaults to ON.
 -- ================================================================
-local LOGO_ASSET_ID = "rbxassetid://71064306381045"
+local LOGO_ASSET_ID = "rbxassetid://137569557880178"
 local LOGO_FILL     = 0.62
 
 -- ▼ Set your Discord invite link here
