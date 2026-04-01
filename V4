@@ -1,14 +1,16 @@
 -- ================================================================
 -- Vesper UI Library — v3.3  (modified)
 -- CHANGES over stock v3.3:
---   • Bubble: logo removed; replaced with a compact 3-button pill
---     (Discord · Toggle · Close) matching the reference design.
+--   • Bubble: circular logo quick-access icon (no pill/buttons).
+--     Clicking toggles the main window. Stroke pulses Negative
+--     when hidden, returns to Accent when visible.
 --     Set DISCORD_LINK below to your server invite.
 --   • Header: small Discord icon button added to the left of the
 --     mac-style minimize dot. Uses the same link as above.
 --   • Sidebar logo text size increased (18 → 22).
+--   • Transparent Background (GlassMode) defaults to ON.
 -- ================================================================
-local LOGO_ASSET_ID = "rbxassetid://137569557880178"
+local LOGO_ASSET_ID = "rbxassetid://71064306381045"
 local LOGO_FILL     = 0.62
 
 -- ▼ Set your Discord invite link here
@@ -1428,112 +1430,75 @@ function Vesper:CreateWindow(cfg)
     Window.CreateTab = Window.AddTab
 
     -- ════════════════════════════════════════════════════════════
-    --  BUBBLE  — redesigned: compact 3-button pill, no logo
-    --  Layout (left → right): [Discord] [Toggle] [Close]
-    --  Total size: 96 × 30 px.  Draggable via the background frame.
+    --  BUBBLE  — circular logo quick-access icon
+    --  Matches the reference: a filled circle showing the Vesper
+    --  logo artwork, clipped cleanly inside the circle.
+    --  Click to toggle the main window.  Fully draggable.
     -- ════════════════════════════════════════════════════════════
-    local BUBBLE_W, BUBBLE_H = 96, 30
-    local BTN_SIZE            = 22   -- inner button square
-    local BTN_PAD             = 4    -- gap from edge / between buttons
+    local BUBBLE_SIZE = 56   -- diameter of the circle in px
 
     local Bubble = Instance.new("Frame", Screen)
     Bubble.BackgroundColor3 = T.Background
     Bubble.AnchorPoint      = Vector2.new(0, 0)
     Bubble.Position         = UDim2.new(0, 20, 0, 20)
-    Bubble.Size             = UDim2.new(0, BUBBLE_W, 0, BUBBLE_H)
+    Bubble.Size             = UDim2.new(0, BUBBLE_SIZE, 0, BUBBLE_SIZE)
     Bubble.ClipsDescendants = false
-    AddCorner(Bubble, 8)
-    local BubbleStroke = AddStroke(Bubble, T.Border, 1)
-    TC(Bubble,  "BackgroundColor3", "Background")
-    TCS(BubbleStroke, "Border")
+    AddCorner(Bubble, 100)   -- full circle
+    local BubbleStroke = AddStroke(Bubble, T.Accent, 2)
+    TC(Bubble, "BackgroundColor3", "Background")
+    TCS(BubbleStroke, "Accent")
 
-    -- Subtle glow behind the pill
+    -- Soft accent glow ring behind the circle
     local BubbleGlow = Instance.new("ImageLabel", Bubble)
     BubbleGlow.BackgroundTransparency = 1
-    BubbleGlow.Position          = UDim2.new(0, -8, 0, -8)
-    BubbleGlow.Size              = UDim2.new(1, 16, 1, 16)
+    BubbleGlow.Position          = UDim2.new(0, -10, 0, -10)
+    BubbleGlow.Size              = UDim2.new(1, 20, 1, 20)
     BubbleGlow.Image             = "rbxassetid://4996891970"
     BubbleGlow.ImageColor3       = T.Accent
-    BubbleGlow.ImageTransparency = 0.78
+    BubbleGlow.ImageTransparency = 0.65
     BubbleGlow.ZIndex            = 0
     TC(BubbleGlow, "ImageColor3", "Accent")
 
-    -- Helper: create one of the three pill buttons
-    local function MakePillBtn(xPos, bgColor, iconName, iconColor, isStatic)
-        local btn = Instance.new("TextButton", Bubble)
-        btn.BackgroundColor3 = bgColor
-        btn.AnchorPoint      = Vector2.new(0, 0.5)
-        btn.Position         = UDim2.new(0, xPos, 0.5, 0)
-        btn.Size             = UDim2.new(0, BTN_SIZE, 0, BTN_SIZE)
-        btn.Text             = ""
-        btn.AutoButtonColor  = false
-        btn.ZIndex           = 3
-        AddCorner(btn, 6)
+    -- Inner clip circle: same size as Bubble, rounds the logo image
+    local BubbleClip = Instance.new("Frame", Bubble)
+    BubbleClip.BackgroundTransparency = 1
+    BubbleClip.Size             = UDim2.new(1, 0, 1, 0)
+    BubbleClip.ClipsDescendants = true
+    AddCorner(BubbleClip, 100)
 
-        local ico = Instance.new("ImageLabel", btn)
-        ico.BackgroundTransparency = 1
-        ico.AnchorPoint            = Vector2.new(0.5, 0.5)
-        ico.Position               = UDim2.new(0.5, 0, 0.5, 0)
-        ico.Size                   = UDim2.new(0, 13, 0, 13)
-        ico.Image                  = Icon(iconName)
-        ico.ImageColor3            = iconColor
-        ico.ScaleType              = Enum.ScaleType.Fit
-        ico.ZIndex                 = 4
-
-        if not isStatic then
-            TC(btn, "BackgroundColor3", "SurfaceHigh")
-        end
-
-        return btn, ico
+    do
+        -- Oversize the ImageLabel so the visible artwork (LOGO_FILL fraction
+        -- of the canvas) exactly fills the BUBBLE_SIZE circle, then centre it.
+        local imgPx    = math.ceil(BUBBLE_SIZE / LOGO_FILL)
+        local overflow = imgPx - BUBBLE_SIZE
+        local img = Instance.new("ImageLabel", BubbleClip)
+        img.BackgroundTransparency = 1
+        img.Size     = UDim2.new(0, imgPx, 0, imgPx)
+        img.Position = UDim2.new(0, -overflow / 2, 0, -overflow / 2)
+        img.Image    = LOGO_ASSET_ID
+        img.ScaleType= Enum.ScaleType.Fit
+        img.ZIndex   = 2
     end
 
-    -- [1] Discord button  — Discord Blurple bg, white icon
-    local DiscordBtnBubble, _ = MakePillBtn(
-        BTN_PAD,
-        Color3.fromRGB(88, 101, 242),
-        "lucide-message-circle",
-        Color3.new(1, 1, 1),
-        true   -- static colour, skip TC
-    )
-
-    -- [2] Toggle button  — surface bg, accent icon
-    local ToggleBtn, ToggleIco = MakePillBtn(
-        BTN_PAD + BTN_SIZE + BTN_PAD,
-        T.SurfaceHigh,
-        "lucide-play",
-        T.Accent,
-        false
-    )
-    TC(ToggleIco, "ImageColor3", "Accent")
-
-    -- [3] Close button  — surface bg, negative (red) icon
-    local CloseSmBtn, CloseSmIco = MakePillBtn(
-        BTN_PAD + (BTN_SIZE + BTN_PAD) * 2,
-        T.SurfaceHigh,
-        "lucide-x",
-        T.Negative,
-        false
-    )
-    TC(CloseSmIco, "ImageColor3", "Negative")
-
-    -- Invisible drag handle — entire pill minus buttons acts as drag area
-    local BubbleDrag = Instance.new("TextButton", Bubble)
-    BubbleDrag.BackgroundTransparency = 1
-    BubbleDrag.Size   = UDim2.new(1, 0, 1, 0)
-    BubbleDrag.Text   = ""
-    BubbleDrag.ZIndex = 2
-    MakeDraggable(BubbleDrag, Bubble)
+    -- Clickable / draggable overlay
+    local BubbleBtn = Instance.new("TextButton", Bubble)
+    BubbleBtn.BackgroundTransparency = 1
+    BubbleBtn.Size   = UDim2.new(1, 0, 1, 0)
+    BubbleBtn.Text   = ""
+    BubbleBtn.ZIndex = 10
+    MakeDraggable(BubbleBtn, Bubble)
 
     -- Toggle / Minimize logic
     local minimized = false
     local function ToggleUI()
         minimized = not minimized
-        -- Swap icon between play and pause to reflect state
-        ToggleIco.Image = minimized and Icon("lucide-play") or Icon("lucide-pause")
         if minimized then
+            -- Pulse the bubble stroke to Negative to hint "hidden"
+            TweenPlay(BubbleStroke, {Color = Vesper.Theme.Negative}, 0.18)
             TweenPlay(WinScale, {Scale = 0}, 0.28, Enum.EasingStyle.Back, Enum.EasingDirection.In)
             task.delay(0.28, function() Main.Visible = false end)
         else
+            TweenPlay(BubbleStroke, {Color = Vesper.Theme.Accent}, 0.18)
             Main.Visible = true
             TweenPlay(WinScale, {Scale = 1}, 0.45, Enum.EasingStyle.Elastic)
         end
@@ -1541,25 +1506,21 @@ function Vesper:CreateWindow(cfg)
 
     Main.Visible = true
     TweenPlay(WinScale, {Scale = 1}, 0.5, Enum.EasingStyle.Elastic)
-    -- Start showing "pause" icon since UI is visible by default
-    ToggleIco.Image = Icon("lucide-pause")
 
-    -- Button connections
-    DiscordBtnBubble.MouseButton1Click:Connect(function()
-        TweenPlay(DiscordBtnBubble, {BackgroundColor3 = Color3.fromRGB(68, 80, 200)}, 0.08)
-        task.delay(0.12, function()
-            TweenPlay(DiscordBtnBubble, {BackgroundColor3 = Color3.fromRGB(88, 101, 242)}, 0.15)
-        end)
-        pcall(function() game:GetService("GuiService"):OpenBrowserWindow(DISCORD_LINK) end)
-        pcall(function() setclipboard(DISCORD_LINK) end)
+    -- Apply GlassMode on first load since Default = true
+    Main.BackgroundTransparency    = 0.32
+    Sidebar.BackgroundTransparency = 0.35
+    MainStroke.Transparency        = 0.65
+    MainStroke.Thickness           = 1.8
+
+    -- Hover pulse on the bubble
+    BubbleBtn.MouseEnter:Connect(function()
+        TweenPlay(Bubble, {BackgroundColor3 = Vesper.Theme.SidebarHover}, 0.15)
     end)
-
-    ToggleBtn.MouseButton1Click:Connect(ToggleUI)
-
-    CloseSmBtn.MouseButton1Click:Connect(function()
-        TweenPlay(WinScale, {Scale = 0}, 0.22, Enum.EasingStyle.Back, Enum.EasingDirection.In)
-        task.delay(0.22, function() Main.Visible = false end)
+    BubbleBtn.MouseLeave:Connect(function()
+        TweenPlay(Bubble, {BackgroundColor3 = Vesper.Theme.Background}, 0.18)
     end)
+    BubbleBtn.MouseButton1Click:Connect(ToggleUI)
 
     -- Header button connections (kept for completeness)
     MinimizeBtn.MouseButton1Click:Connect(ToggleUI)
