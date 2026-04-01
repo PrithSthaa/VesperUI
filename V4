@@ -1,21 +1,18 @@
 -- ================================================================
--- Vesper UI Library — v3.3
--- FIXES over v3.2:
---   • Logo zoom-crop: ImageLabel is oversized inside a ClipsDescendants
---     clip-frame so the visible artwork fills the container instead of
---     floating in the middle with large transparent margins.
---   • UIStroke theme tracking: every AddStroke() call for border-coloured
---     strokes now registers the returned UIStroke in _tracked, so
---     RefreshTheme updates ALL borders, rows, panels, and inputs when
---     the theme changes — not just background colours.
+-- Vesper UI Library — v3.3  (modified)
+-- CHANGES over stock v3.3:
+--   • Bubble: logo removed; replaced with a compact 3-button pill
+--     (Discord · Toggle · Close) matching the reference design.
+--     Set DISCORD_LINK below to your server invite.
+--   • Header: small Discord icon button added to the left of the
+--     mac-style minimize dot. Uses the same link as above.
+--   • Sidebar logo text size increased (18 → 22).
 -- ================================================================
-local LOGO_ASSET_ID = "rbxassetid://137569557880178"
+local LOGO_ASSET_ID = "rbxassetid://71064306381045"
+local LOGO_FILL     = 0.62
 
--- The logo image asset has built-in transparent padding. The actual
--- visible artwork occupies roughly 62 % of the canvas. To make it
--- fill a given pixel container we oversize the ImageLabel by ÷0.62
--- and clip the parent. Adjust LOGO_FILL if your asset differs.
-local LOGO_FILL = 0.62  -- fraction of canvas that is visible artwork
+-- ▼ Set your Discord invite link here
+local DISCORD_LINK  = "https://discord.gg/placeholder"
 
 local CoreGui      = game:GetService("CoreGui")
 local TweenService = game:GetService("TweenService")
@@ -39,10 +36,10 @@ local function AddCorner(p, r)
 end
 local function AddStroke(p, col, thick, trans)
     local s = Instance.new("UIStroke", p)
-    s.Color       = col   or Color3.new(1,1,1)
-    s.Thickness   = thick or 1
+    s.Color        = col   or Color3.new(1,1,1)
+    s.Thickness    = thick or 1
     s.Transparency = trans or 0
-    return s   -- always return so callers can track it
+    return s
 end
 local function AddPad(p, top, bot, left, right)
     local u = Instance.new("UIPadding", p)
@@ -87,10 +84,10 @@ local function MakeDraggable(handle, frame)
 end
 local function Ripple(btn, color)
     local r = Instance.new("Frame", btn)
-    r.BackgroundColor3    = color or Color3.fromRGB(139,92,246)
+    r.BackgroundColor3       = color or Color3.fromRGB(139,92,246)
     r.BackgroundTransparency = 0.7
-    r.AnchorPoint         = Vector2.new(0.5, 0.5)
-    r.ZIndex              = btn.ZIndex + 2
+    r.AnchorPoint            = Vector2.new(0.5, 0.5)
+    r.ZIndex                 = btn.ZIndex + 2
     AddCorner(r, 100)
     local mp = UIS:GetMouseLocation()
     local ab = btn.AbsolutePosition
@@ -102,13 +99,9 @@ local function Ripple(btn, color)
 end
 
 -- ────────────────────────────────────────────────────────────────
--- LOGO BUILDER
--- Creates a clip-frame of `containerPx` size, then places an
--- oversized ImageLabel inside so the visible artwork fills the
--- frame rather than floating with transparent margins.
+-- LOGO BUILDER (used in sidebar only — bubble no longer uses this)
 -- ────────────────────────────────────────────────────────────────
 local function MakeLogoClipped(parent, containerPx, position, anchor, zindex)
-    -- Outer clip frame – this is the visible circle/square
     local clip = Instance.new("Frame", parent)
     clip.BackgroundTransparency = 1
     clip.Size                   = UDim2.new(0, containerPx, 0, containerPx)
@@ -117,10 +110,8 @@ local function MakeLogoClipped(parent, containerPx, position, anchor, zindex)
     if anchor then clip.AnchorPoint = anchor end
     if zindex then clip.ZIndex      = zindex end
 
-    -- Oversize the image so the artwork (LOGO_FILL fraction of canvas)
-    -- exactly fills containerPx. Then centre it inside the clip frame.
-    local imgPx = math.ceil(containerPx / LOGO_FILL)
-    local overflow = imgPx - containerPx                   -- total overflow
+    local imgPx    = math.ceil(containerPx / LOGO_FILL)
+    local overflow = imgPx - containerPx
     local img = Instance.new("ImageLabel", clip)
     img.BackgroundTransparency = 1
     img.Size                   = UDim2.new(0, imgPx, 0, imgPx)
@@ -205,7 +196,6 @@ end
 --  CREATE WINDOW
 -- ════════════════════════════════════════════════════════════════
 function Vesper:CreateWindow(cfg)
-    -- Live proxy: every T.X read always returns Vesper.Theme.X
     local T = setmetatable({}, {
         __index    = function(_, k) return Vesper.Theme[k] end,
         __newindex = function() end,
@@ -246,8 +236,8 @@ function Vesper:CreateWindow(cfg)
     Main.Size             = UDim2.new(0, 730, 0, 520)
     Main.ClipsDescendants = false
     Main.Visible          = false
-    local MainCorner      = AddCorner(Main, 10)
-    local MainStroke      = AddStroke(Main, T.Border, 1.5)
+    local MainCorner = AddCorner(Main, 10)
+    local MainStroke = AddStroke(Main, T.Border, 1.5)
 
     local WinGlow = Instance.new("ImageLabel", Main)
     WinGlow.BackgroundTransparency = 1
@@ -279,7 +269,6 @@ function Vesper:CreateWindow(cfg)
     SideLine.Size             = UDim2.new(0, 1, 1, 0)
     SideLine.BorderSizePixel  = 0
 
-    -- Single Window declaration
     local Window       = {}
     Window._active     = nil
     Window._tabs       = {}
@@ -287,22 +276,16 @@ function Vesper:CreateWindow(cfg)
     Window.Sidebar     = Sidebar
     Vesper._window     = Window
 
-    -- ── Theme tracking registry ───────────────────────────────────
-    -- TC  : register a BackgroundColor3 / TextColor3 / ImageColor3 / etc.
-    -- TCS : register a UIStroke.Color — called after every AddStroke
-    --       that uses a theme colour, so strokes update on theme switch.
     local _tracked = {}
-
     local function TC(obj, prop, themeKey)
         obj[prop] = Vesper.Theme[themeKey]
         table.insert(_tracked, { obj = obj, prop = prop, key = themeKey })
     end
-    local function TCS(stroke, themeKey)   -- track a UIStroke.Color
+    local function TCS(stroke, themeKey)
         stroke.Color = Vesper.Theme[themeKey]
         table.insert(_tracked, { obj = stroke, prop = "Color", key = themeKey })
     end
 
-    -- ── RefreshTheme ──────────────────────────────────────────────
     function Window:RefreshTheme()
         for _, item in ipairs(_tracked) do
             if item.obj and item.obj.Parent then
@@ -326,42 +309,35 @@ function Vesper:CreateWindow(cfg)
         end
     end
 
-    -- Initial colours
     TC(Main,     "BackgroundColor3", "Background")
     TC(Sidebar,  "BackgroundColor3", "Sidebar")
     TC(SideFlat, "BackgroundColor3", "Sidebar")
     TC(SideLine, "BackgroundColor3", "Border")
 
     -- ── Sidebar logo ──────────────────────────────────────────────
-    -- LogoFrame is 130 px tall. It contains two cells side-by-side:
-    -- a 100 px left cell (clip-zoomed logo) and a right text cell.
     local LogoFrame = Instance.new("Frame", Sidebar)
     LogoFrame.BackgroundTransparency = 1
     LogoFrame.Size                   = UDim2.new(1, 0, 0, 130)
 
-    -- Left cell: 100 px wide, clips the oversized logo image
     local LogoCell = Instance.new("Frame", LogoFrame)
     LogoCell.BackgroundTransparency = 1
     LogoCell.Position               = UDim2.new(0, 0, 0, 0)
     LogoCell.Size                   = UDim2.new(0, 100, 1, 0)
     LogoCell.ClipsDescendants       = true
 
-    -- Oversize the image so the visible artwork fills the 100 px cell
     do
-        local cellPx  = 100
-        local imgPx   = math.ceil(cellPx / LOGO_FILL)   -- ≈ 162 px
+        local cellPx   = 100
+        local imgPx    = math.ceil(cellPx / LOGO_FILL)
         local overflow = imgPx - cellPx
         local img = Instance.new("ImageLabel", LogoCell)
         img.BackgroundTransparency = 1
         img.Size                   = UDim2.new(0, imgPx, 0, imgPx)
-        -- centre it inside the cell (negative offset on both axes)
         img.Position               = UDim2.new(0, -overflow / 2, 0.5, -imgPx / 2)
         img.Image                  = LOGO_ASSET_ID
         img.ScaleType              = Enum.ScaleType.Fit
         img.ZIndex                 = 2
     end
 
-    -- Right cell: title + tag
     local TextCell = Instance.new("Frame", LogoFrame)
     TextCell.BackgroundTransparency = 1
     TextCell.Position               = UDim2.new(0, 104, 0, 0)
@@ -371,18 +347,18 @@ function Vesper:CreateWindow(cfg)
     LogoName.BackgroundTransparency = 1
     LogoName.AnchorPoint    = Vector2.new(0, 0.5)
     LogoName.Position       = UDim2.new(0, 0, 0.5, -12)
-    LogoName.Size           = UDim2.new(1, 0, 0, 22)
+    LogoName.Size           = UDim2.new(1, 0, 0, 26)
     LogoName.Font           = Enum.Font.GothamBold
     LogoName.Text           = "Vesper"
     LogoName.TextColor3     = T.Text
-    LogoName.TextSize       = 18
+    LogoName.TextSize       = 22  -- ▲ increased from 18
     LogoName.TextXAlignment = Enum.TextXAlignment.Left
     TC(LogoName, "TextColor3", "Text")
 
     local LogoTag = Instance.new("TextLabel", TextCell)
     LogoTag.BackgroundTransparency = 1
     LogoTag.AnchorPoint     = Vector2.new(0, 0.5)
-    LogoTag.Position        = UDim2.new(0, 0, 0.5, 12)
+    LogoTag.Position        = UDim2.new(0, 0, 0.5, 14)
     LogoTag.Size            = UDim2.new(1, 0, 0, 14)
     LogoTag.Font            = Enum.Font.Gotham
     LogoTag.Text            = tag
@@ -398,7 +374,6 @@ function Vesper:CreateWindow(cfg)
     LogoDiv.BorderSizePixel  = 0
     TC(LogoDiv, "BackgroundColor3", "Border")
 
-    -- Tab list
     local TabList = Instance.new("ScrollingFrame", Sidebar)
     TabList.BackgroundTransparency = 1
     TabList.Position               = UDim2.new(0, 0, 0, 138)
@@ -462,10 +437,55 @@ function Vesper:CreateWindow(cfg)
         TweenPlay(dot, {BackgroundColor3 = dim}, 0)
         return dot
     end
+
+    -- Dots: Close at xOff 14, Minimize at xOff 32 (unchanged)
     local CloseBtn    = MakeDot(T.Negative, 14)
     local MinimizeBtn = MakeDot(T.Warning,  32)
     table.insert(_tracked, { obj = CloseBtn,    prop = "BackgroundColor3", key = "Negative" })
     table.insert(_tracked, { obj = MinimizeBtn, prop = "BackgroundColor3", key = "Warning"  })
+
+    -- ── Discord header button (left of minimize dot) ──────────────
+    -- Sits at xOff 52 — just to the left of the yellow dot.
+    local DiscordColor = Color3.fromRGB(88, 101, 242)   -- official Discord Blurple
+
+    local HeaderDiscord = Instance.new("TextButton", Header)
+    HeaderDiscord.BackgroundColor3 = DiscordColor
+    HeaderDiscord.AnchorPoint      = Vector2.new(1, 0.5)
+    HeaderDiscord.Position         = UDim2.new(1, -52, 0.5, 0)
+    HeaderDiscord.Size             = UDim2.new(0, 14, 0, 14)
+    HeaderDiscord.Text             = ""
+    HeaderDiscord.AutoButtonColor  = false
+    AddCorner(HeaderDiscord, 4)
+
+    -- Inner icon — message-circle is the closest lucide substitute for Discord
+    local HDIco = Instance.new("ImageLabel", HeaderDiscord)
+    HDIco.BackgroundTransparency = 1
+    HDIco.AnchorPoint            = Vector2.new(0.5, 0.5)
+    HDIco.Position               = UDim2.new(0.5, 0, 0.5, 0)
+    HDIco.Size                   = UDim2.new(0, 10, 0, 10)
+    HDIco.Image                  = Icon("lucide-message-circle")
+    HDIco.ImageColor3            = Color3.new(1, 1, 1)
+    HDIco.ScaleType              = Enum.ScaleType.Fit
+
+    -- Hover / click feedback
+    HeaderDiscord.MouseEnter:Connect(function()
+        TweenPlay(HeaderDiscord, {BackgroundColor3 = Color3.fromRGB(110, 124, 255)}, 0.1)
+    end)
+    HeaderDiscord.MouseLeave:Connect(function()
+        TweenPlay(HeaderDiscord, {BackgroundColor3 = DiscordColor}, 0.12)
+    end)
+    HeaderDiscord.MouseButton1Click:Connect(function()
+        TweenPlay(HeaderDiscord, {BackgroundColor3 = Color3.fromRGB(68, 80, 200)}, 0.08)
+        task.delay(0.12, function()
+            TweenPlay(HeaderDiscord, {BackgroundColor3 = DiscordColor}, 0.15)
+        end)
+        -- Open in browser (executor context)
+        pcall(function()
+            game:GetService("GuiService"):OpenBrowserWindow(DISCORD_LINK)
+        end)
+        -- Fallback: copy to clipboard
+        pcall(function() setclipboard(DISCORD_LINK) end)
+    end)
 
     local HDivider = Instance.new("Frame", Header)
     HDivider.BackgroundColor3 = T.Border
@@ -531,11 +551,11 @@ function Vesper:CreateWindow(cfg)
         end)
 
         local Bar = Instance.new("Frame", Btn)
-        Bar.BackgroundColor3     = T.Accent
-        Bar.BackgroundTransparency = 1
-        Bar.AnchorPoint          = Vector2.new(0, 0.5)
-        Bar.Position             = UDim2.new(0, -2, 0.5, 0)
-        Bar.Size                 = UDim2.new(0, 2, 0.5, 0)
+        Bar.BackgroundColor3      = T.Accent
+        Bar.BackgroundTransparency= 1
+        Bar.AnchorPoint           = Vector2.new(0, 0.5)
+        Bar.Position              = UDim2.new(0, -2, 0.5, 0)
+        Bar.Size                  = UDim2.new(0, 2, 0.5, 0)
         AddCorner(Bar, 4)
 
         local xOff   = tabIcon and 34 or 10
@@ -627,7 +647,6 @@ function Vesper:CreateWindow(cfg)
         if not Window._active then SwitchTab(tabObj) end
         table.insert(Window._tabs, tabObj)
 
-        -- ── TAB API ─────────────────────────────────────────────
         local TabAPI = {}
 
         function TabAPI:CreateSection(cfg2)
@@ -643,7 +662,6 @@ function Vesper:CreateWindow(cfg)
             SBase.Size             = UDim2.new(1, 0, 0, 42)
             SBase.AutomaticSize    = Enum.AutomaticSize.Y
             AddCorner(SBase, 8)
-            -- ▼ FIX: track the section border stroke
             TCS(AddStroke(SBase, T.Border, 1), "Border")
             TC(SBase, "BackgroundColor3", "Surface")
 
@@ -698,7 +716,6 @@ function Vesper:CreateWindow(cfg)
 
             local SecAPI = {}
 
-            -- ▼ FIX: MakeRow now tracks its border stroke
             local function MakeRow(height)
                 local row = Instance.new("Frame", EBox)
                 row.BackgroundColor3 = T.SurfaceHigh
@@ -739,7 +756,6 @@ function Vesper:CreateWindow(cfg)
                 return tl
             end
 
-            -- CreateLabel
             function SecAPI:CreateLabel(cfg3)
                 local text = type(cfg3) == "string" and cfg3 or (cfg3.Title or cfg3[1] or "")
                 local body = type(cfg3) == "table"  and cfg3.Content or nil
@@ -759,7 +775,6 @@ function Vesper:CreateWindow(cfg)
                 return api
             end
 
-            -- CreateParagraph
             function SecAPI:CreateParagraph(cfg3)
                 local title = type(cfg3) == "string" and cfg3 or (cfg3.Title or cfg3[1] or "")
                 local body  = type(cfg3) == "table"  and (cfg3.Content or cfg3[2] or "") or ""
@@ -786,7 +801,6 @@ function Vesper:CreateWindow(cfg)
                 return api
             end
 
-            -- CreateSeparator
             function SecAPI:CreateSeparator(cfg3)
                 local label = type(cfg3) == "string" and cfg3
                     or (type(cfg3) == "table" and cfg3.Title) or nil
@@ -808,7 +822,6 @@ function Vesper:CreateWindow(cfg)
                 TC(Line, "BackgroundColor3", "Border")
             end
 
-            -- CreateDynamicLabel
             function SecAPI:CreateDynamicLabel(cfg3)
                 local name  = type(cfg3) == "string" and cfg3 or (cfg3.Title or cfg3[1] or "Label")
                 local value = type(cfg3) == "table"  and (cfg3.Value or cfg3[2] or "—") or "—"
@@ -836,7 +849,6 @@ function Vesper:CreateWindow(cfg)
                 return api
             end
 
-            -- CreateButton
             function SecAPI:CreateButton(cfg3)
                 local title  = cfg3.Title or cfg3[1] or "Button"
                 local desc   = cfg3.Description or cfg3.Desc or cfg3[2] or nil
@@ -871,7 +883,6 @@ function Vesper:CreateWindow(cfg)
                 return api
             end
 
-            -- CreateToggle
             function SecAPI:CreateToggle(key, cfg3)
                 if type(key) == "table" then cfg3 = key; key = nil end
                 cfg3 = cfg3 or {}
@@ -917,7 +928,6 @@ function Vesper:CreateWindow(cfg)
                 return api
             end
 
-            -- CreateSlider
             function SecAPI:CreateSlider(key, cfg3)
                 if type(key) == "table" then cfg3 = key; key = nil end
                 cfg3 = cfg3 or {}
@@ -1007,7 +1017,6 @@ function Vesper:CreateWindow(cfg)
                 return api
             end
 
-            -- CreateDropdown
             function SecAPI:CreateDropdown(key, cfg3)
                 if type(key) == "table" then cfg3 = key; key = nil end
                 cfg3 = cfg3 or {}
@@ -1051,7 +1060,6 @@ function Vesper:CreateWindow(cfg)
                 Panel.Position = UDim2.new(0, 0, 1, 4); Panel.Size = UDim2.new(1, 0, 0, 0)
                 Panel.ClipsDescendants = true; Panel.Visible = false; Panel.ZIndex = 20
                 AddCorner(Panel, 6)
-                -- ▼ FIX: track the dropdown panel border stroke
                 TCS(AddStroke(Panel, T.Border, 1), "Border")
                 TC(Panel, "BackgroundColor3", "Surface")
                 local SearchBox = Instance.new("TextBox", Panel)
@@ -1158,7 +1166,6 @@ function Vesper:CreateWindow(cfg)
                 return api
             end
 
-            -- CreateTextBox
             function SecAPI:CreateTextBox(key, cfg3)
                 if type(key) == "table" then cfg3 = key; key = nil end
                 cfg3 = cfg3 or {}
@@ -1176,7 +1183,6 @@ function Vesper:CreateWindow(cfg)
                 InputBg.Position = UDim2.new(0, 8, 0, desc and 38 or 28)
                 InputBg.Size     = UDim2.new(1, -16, 0, 18)
                 AddCorner(InputBg, 4)
-                -- ▼ FIX: track textbox input border stroke
                 TCS(AddStroke(InputBg, T.Border, 1), "Border")
                 TC(InputBg, "BackgroundColor3", "InputBg")
                 local Box = Instance.new("TextBox", InputBg)
@@ -1209,7 +1215,6 @@ function Vesper:CreateWindow(cfg)
                 return api
             end
 
-            -- CreateKeybind
             function SecAPI:CreateKeybind(key, cfg3)
                 if type(key) == "table" then cfg3 = key; key = nil end
                 cfg3 = cfg3 or {}
@@ -1268,7 +1273,6 @@ function Vesper:CreateWindow(cfg)
                 return api
             end
 
-            -- CreateColorPicker
             function SecAPI:CreateColorPicker(key, cfg3)
                 if type(key) == "table" then cfg3 = key; key = nil end
                 cfg3 = cfg3 or {}
@@ -1290,7 +1294,6 @@ function Vesper:CreateWindow(cfg)
                 Preview.BackgroundColor3 = color; Preview.AnchorPoint = Vector2.new(1, 0.5)
                 Preview.Position = UDim2.new(1, -10, 0.5, 0); Preview.Size = UDim2.new(0, 38, 0, 18)
                 AddCorner(Preview, 5)
-                -- ▼ FIX: track colour picker preview border stroke
                 TCS(AddStroke(Preview, T.Border, 1), "Border")
                 local Panel2 = Instance.new("Frame", wrap)
                 Panel2.BackgroundTransparency = 1
@@ -1425,62 +1428,108 @@ function Vesper:CreateWindow(cfg)
     Window.CreateTab = Window.AddTab
 
     -- ════════════════════════════════════════════════════════════
-    --  BUBBLE  (floating quick-access icon)
-    --  Uses a rounded inner clip-frame so the zoomed logo is
-    --  naturally cropped to the circle shape.
+    --  BUBBLE  — redesigned: compact 3-button pill, no logo
+    --  Layout (left → right): [Discord] [Toggle] [Close]
+    --  Total size: 96 × 30 px.  Draggable via the background frame.
     -- ════════════════════════════════════════════════════════════
+    local BUBBLE_W, BUBBLE_H = 96, 30
+    local BTN_SIZE            = 22   -- inner button square
+    local BTN_PAD             = 4    -- gap from edge / between buttons
+
     local Bubble = Instance.new("Frame", Screen)
     Bubble.BackgroundColor3 = T.Background
     Bubble.AnchorPoint      = Vector2.new(0, 0)
     Bubble.Position         = UDim2.new(0, 20, 0, 20)
-    Bubble.Size             = UDim2.new(0, 72, 0, 72)
+    Bubble.Size             = UDim2.new(0, BUBBLE_W, 0, BUBBLE_H)
     Bubble.ClipsDescendants = false
-    AddCorner(Bubble, 100)
-    local BubbleStroke = AddStroke(Bubble, T.Accent, 2)
-    TC(Bubble, "BackgroundColor3", "Background")
-    TCS(BubbleStroke, "Accent")
+    AddCorner(Bubble, 8)
+    local BubbleStroke = AddStroke(Bubble, T.Border, 1)
+    TC(Bubble,  "BackgroundColor3", "Background")
+    TCS(BubbleStroke, "Border")
 
+    -- Subtle glow behind the pill
     local BubbleGlow = Instance.new("ImageLabel", Bubble)
     BubbleGlow.BackgroundTransparency = 1
-    BubbleGlow.Position         = UDim2.new(0, -10, 0, -10)
-    BubbleGlow.Size             = UDim2.new(1, 20, 1, 20)
-    BubbleGlow.Image            = "rbxassetid://4996891970"
-    BubbleGlow.ImageColor3      = T.Accent
-    BubbleGlow.ImageTransparency= 0.65
-    BubbleGlow.ZIndex           = 0
+    BubbleGlow.Position          = UDim2.new(0, -8, 0, -8)
+    BubbleGlow.Size              = UDim2.new(1, 16, 1, 16)
+    BubbleGlow.Image             = "rbxassetid://4996891970"
+    BubbleGlow.ImageColor3       = T.Accent
+    BubbleGlow.ImageTransparency = 0.78
+    BubbleGlow.ZIndex            = 0
     TC(BubbleGlow, "ImageColor3", "Accent")
 
-    -- Inner clip circle: same size as Bubble, clips the oversized logo
-    local BubbleClip = Instance.new("Frame", Bubble)
-    BubbleClip.BackgroundTransparency = 1
-    BubbleClip.Size             = UDim2.new(1, 0, 1, 0)
-    BubbleClip.ClipsDescendants = true
-    AddCorner(BubbleClip, 100)
+    -- Helper: create one of the three pill buttons
+    local function MakePillBtn(xPos, bgColor, iconName, iconColor, isStatic)
+        local btn = Instance.new("TextButton", Bubble)
+        btn.BackgroundColor3 = bgColor
+        btn.AnchorPoint      = Vector2.new(0, 0.5)
+        btn.Position         = UDim2.new(0, xPos, 0.5, 0)
+        btn.Size             = UDim2.new(0, BTN_SIZE, 0, BTN_SIZE)
+        btn.Text             = ""
+        btn.AutoButtonColor  = false
+        btn.ZIndex           = 3
+        AddCorner(btn, 6)
 
-    do
-        local cellPx   = 72
-        local imgPx    = math.ceil(cellPx / LOGO_FILL)
-        local overflow = imgPx - cellPx
-        local img = Instance.new("ImageLabel", BubbleClip)
-        img.BackgroundTransparency = 1
-        img.Size     = UDim2.new(0, imgPx, 0, imgPx)
-        img.Position = UDim2.new(0, -overflow / 2, 0, -overflow / 2)
-        img.Image    = LOGO_ASSET_ID
-        img.ScaleType= Enum.ScaleType.Fit
-        img.ZIndex   = 2
+        local ico = Instance.new("ImageLabel", btn)
+        ico.BackgroundTransparency = 1
+        ico.AnchorPoint            = Vector2.new(0.5, 0.5)
+        ico.Position               = UDim2.new(0.5, 0, 0.5, 0)
+        ico.Size                   = UDim2.new(0, 13, 0, 13)
+        ico.Image                  = Icon(iconName)
+        ico.ImageColor3            = iconColor
+        ico.ScaleType              = Enum.ScaleType.Fit
+        ico.ZIndex                 = 4
+
+        if not isStatic then
+            TC(btn, "BackgroundColor3", "SurfaceHigh")
+        end
+
+        return btn, ico
     end
 
-    local BubbleBtn = Instance.new("TextButton", Bubble)
-    BubbleBtn.BackgroundTransparency = 1
-    BubbleBtn.Size   = UDim2.new(1, 0, 1, 0)
-    BubbleBtn.Text   = ""
-    BubbleBtn.ZIndex = 10
-    MakeDraggable(BubbleBtn, Bubble)
+    -- [1] Discord button  — Discord Blurple bg, white icon
+    local DiscordBtnBubble, _ = MakePillBtn(
+        BTN_PAD,
+        Color3.fromRGB(88, 101, 242),
+        "lucide-message-circle",
+        Color3.new(1, 1, 1),
+        true   -- static colour, skip TC
+    )
 
-    -- Toggle / Minimize
+    -- [2] Toggle button  — surface bg, accent icon
+    local ToggleBtn, ToggleIco = MakePillBtn(
+        BTN_PAD + BTN_SIZE + BTN_PAD,
+        T.SurfaceHigh,
+        "lucide-play",
+        T.Accent,
+        false
+    )
+    TC(ToggleIco, "ImageColor3", "Accent")
+
+    -- [3] Close button  — surface bg, negative (red) icon
+    local CloseSmBtn, CloseSmIco = MakePillBtn(
+        BTN_PAD + (BTN_SIZE + BTN_PAD) * 2,
+        T.SurfaceHigh,
+        "lucide-x",
+        T.Negative,
+        false
+    )
+    TC(CloseSmIco, "ImageColor3", "Negative")
+
+    -- Invisible drag handle — entire pill minus buttons acts as drag area
+    local BubbleDrag = Instance.new("TextButton", Bubble)
+    BubbleDrag.BackgroundTransparency = 1
+    BubbleDrag.Size   = UDim2.new(1, 0, 1, 0)
+    BubbleDrag.Text   = ""
+    BubbleDrag.ZIndex = 2
+    MakeDraggable(BubbleDrag, Bubble)
+
+    -- Toggle / Minimize logic
     local minimized = false
     local function ToggleUI()
         minimized = not minimized
+        -- Swap icon between play and pause to reflect state
+        ToggleIco.Image = minimized and Icon("lucide-play") or Icon("lucide-pause")
         if minimized then
             TweenPlay(WinScale, {Scale = 0}, 0.28, Enum.EasingStyle.Back, Enum.EasingDirection.In)
             task.delay(0.28, function() Main.Visible = false end)
@@ -1489,15 +1538,36 @@ function Vesper:CreateWindow(cfg)
             TweenPlay(WinScale, {Scale = 1}, 0.45, Enum.EasingStyle.Elastic)
         end
     end
+
     Main.Visible = true
     TweenPlay(WinScale, {Scale = 1}, 0.5, Enum.EasingStyle.Elastic)
+    -- Start showing "pause" icon since UI is visible by default
+    ToggleIco.Image = Icon("lucide-pause")
 
-    BubbleBtn.MouseButton1Click:Connect(ToggleUI)
+    -- Button connections
+    DiscordBtnBubble.MouseButton1Click:Connect(function()
+        TweenPlay(DiscordBtnBubble, {BackgroundColor3 = Color3.fromRGB(68, 80, 200)}, 0.08)
+        task.delay(0.12, function()
+            TweenPlay(DiscordBtnBubble, {BackgroundColor3 = Color3.fromRGB(88, 101, 242)}, 0.15)
+        end)
+        pcall(function() game:GetService("GuiService"):OpenBrowserWindow(DISCORD_LINK) end)
+        pcall(function() setclipboard(DISCORD_LINK) end)
+    end)
+
+    ToggleBtn.MouseButton1Click:Connect(ToggleUI)
+
+    CloseSmBtn.MouseButton1Click:Connect(function()
+        TweenPlay(WinScale, {Scale = 0}, 0.22, Enum.EasingStyle.Back, Enum.EasingDirection.In)
+        task.delay(0.22, function() Main.Visible = false end)
+    end)
+
+    -- Header button connections (kept for completeness)
     MinimizeBtn.MouseButton1Click:Connect(ToggleUI)
     CloseBtn.MouseButton1Click:Connect(function()
         TweenPlay(WinScale, {Scale = 0}, 0.22, Enum.EasingStyle.Back, Enum.EasingDirection.In)
         task.delay(0.22, function() Main.Visible = false end)
     end)
+
     UIS.InputBegan:Connect(function(i, p)
         if not p and i.KeyCode == hotkey then ToggleUI() end
     end)
@@ -1573,7 +1643,7 @@ function Vesper:CreateWindow(cfg)
         local dcontent = cfg2.Content or ""
         local buttons  = cfg2.Buttons or {}
         local Overlay  = Instance.new("Frame", Screen)
-        Overlay.BackgroundColor3    = Color3.new(0,0,0)
+        Overlay.BackgroundColor3       = Color3.new(0,0,0)
         Overlay.BackgroundTransparency = 0.4
         Overlay.Size = UDim2.new(1,0,1,0); Overlay.ZIndex = 50
         local Box = Instance.new("Frame", Overlay)
@@ -1626,27 +1696,20 @@ function Vesper:CreateWindow(cfg)
         end
     end
 
-    -- SelectTab
     function Window:SelectTab(index)
         local tab = Window._tabs[index]
         if tab then SwitchTab(tab) end
     end
 
-    -- BuildUISection
     function Window:BuildUISection(tabAPI)
         local sec = tabAPI:CreateSection({ Title = "Interface", Icon = "lucide-layout" })
         sec:CreateToggle(nil, {
-            Title="Show Quick-Access Icon", Description="Floating icon when UI is hidden",
+            Title="Show Quick-Access Pill", Description="Floating pill buttons when UI is hidden",
             Default=true, Callback=function(val) Bubble.Visible = val end,
         })
-        sec:CreateDropdown("UITheme", {
-            Title="UI Theme", Description="Switch between available themes",
-            Values={"Dark","Midnight","Ember"}, Default="Midnight",
-            Callback=function(themeName) Vesper:SetTheme(themeName) end,
-        })
         sec:CreateToggle("GlassMode", {
-            Title="Transparent Glass Background", Description="Semi-transparent glass-style effect",
-            Default=false, Callback=function(enabled)
+            Title="Transparent Background", Description="Semi-transparent glass-style effect",
+            Default=true, Callback=function(enabled)
                 Main.BackgroundTransparency    = enabled and 0.32 or 0
                 Sidebar.BackgroundTransparency = enabled and 0.35 or 0
                 local stroke = Main:FindFirstChildOfClass("UIStroke")
@@ -1798,6 +1861,8 @@ return Vesper
 USAGE:
 local Vesper      = loadstring(game:HttpGet("YOUR_RAW_URL"))()
 local SaveManager = Vesper.SaveManager
+
+-- Set your Discord link at the top of this file:  DISCORD_LINK = "https://discord.gg/yourserver"
 
 local Window = Vesper:CreateWindow({
     Title = 'Vesper Hub <font color="rgb(139,92,246)">v3</font>',
