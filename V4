@@ -1435,108 +1435,148 @@ function Vesper:CreateWindow(cfg)
     --  logo artwork, clipped cleanly inside the circle.
     --  Click to toggle the main window.  Fully draggable.
     -- ════════════════════════════════════════════════════════════
-    local BUBBLE_SIZE = 56   -- diameter of the circle in px
+local BUBBLE_SIZE = 56
 
-    local Bubble = Instance.new("Frame", Screen)
-    Bubble.BackgroundColor3 = T.Background
-    Bubble.AnchorPoint      = Vector2.new(0, 0)
-    Bubble.Position         = UDim2.new(0, 20, 0, 20)
-    Bubble.Size             = UDim2.new(0, BUBBLE_SIZE, 0, BUBBLE_SIZE)
-    Bubble.ClipsDescendants = false
-    AddCorner(Bubble, 100)   -- full circle
-    local BubbleStroke = AddStroke(Bubble, T.Accent, 2)
-    TC(Bubble, "BackgroundColor3", "Background")
-    TCS(BubbleStroke, "Accent")
+-- MAIN BUBBLE
+local Bubble = Instance.new("Frame", Screen)
+Bubble.AnchorPoint = Vector2.new(0, 0)
+Bubble.Position = UDim2.new(0, 20, 0, 20)
+Bubble.Size = UDim2.new(0, BUBBLE_SIZE, 0, BUBBLE_SIZE)
+Bubble.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+Bubble.ClipsDescendants = false
+AddCorner(Bubble, 100)
 
-    -- Soft accent glow ring behind the circle
-    local BubbleGlow = Instance.new("ImageLabel", Bubble)
-    BubbleGlow.BackgroundTransparency = 1
-    BubbleGlow.Position          = UDim2.new(0, -10, 0, -10)
-    BubbleGlow.Size              = UDim2.new(1, 20, 1, 20)
-    BubbleGlow.Image             = "rbxassetid://4996891970"
-    BubbleGlow.ImageColor3       = T.Accent
-    BubbleGlow.ImageTransparency = 0.65
-    BubbleGlow.ZIndex            = 0
-    TC(BubbleGlow, "ImageColor3", "Accent")
+-- CLEAN STROKE
+local BubbleStroke = Instance.new("UIStroke", Bubble)
+BubbleStroke.Thickness = 1
+BubbleStroke.Color = Color3.fromRGB(45, 45, 45)
 
-    -- Inner clip circle: same size as Bubble, rounds the logo image
-    local BubbleClip = Instance.new("Frame", Bubble)
-    BubbleClip.BackgroundTransparency = 1
-    BubbleClip.Size             = UDim2.new(1, 0, 1, 0)
-    BubbleClip.ClipsDescendants = true
-    AddCorner(BubbleClip, 100)
+-- OUTER GLOW (kept but tuned properly)
+local BubbleGlow = Instance.new("ImageLabel", Bubble)
+BubbleGlow.BackgroundTransparency = 1
+BubbleGlow.AnchorPoint = Vector2.new(0.5, 0.5)
+BubbleGlow.Position = UDim2.new(0.5, 0, 0.5, 0)
 
-    do
-        -- Oversize the ImageLabel so the visible artwork (LOGO_FILL fraction
-        -- of the canvas) exactly fills the BUBBLE_SIZE circle, then centre it.
-        local imgPx    = math.ceil(BUBBLE_SIZE / LOGO_FILL)
-        local overflow = imgPx - BUBBLE_SIZE
-        local img = Instance.new("ImageLabel", BubbleClip)
-        img.BackgroundTransparency = 1
-        img.Size     = UDim2.new(0, imgPx, 0, imgPx)
-        img.Position = UDim2.new(0, -overflow / 2, 0, -overflow / 2)
-        img.Image    = LOGO_ASSET_ID
-        img.ScaleType= Enum.ScaleType.Fit
-        img.ZIndex   = 2
+BubbleGlow.Size = UDim2.new(1, 28, 1, 28) -- slightly bigger than bubble
+BubbleGlow.Image = "rbxassetid://4996891970"
+BubbleGlow.ImageColor3 = Color3.fromRGB(120, 120, 120) -- neutral glow
+BubbleGlow.ImageTransparency = 0.7
+BubbleGlow.ZIndex = 0
+
+-- CLIP CONTAINER (perfect circle masking)
+local Clip = Instance.new("Frame", Bubble)
+Clip.Size = UDim2.new(1, 0, 1, 0)
+Clip.BackgroundTransparency = 1
+Clip.ClipsDescendants = true
+AddCorner(Clip, 100)
+
+-- LOGO (clean + centered properly)
+local Logo = Instance.new("ImageLabel", Clip)
+Logo.BackgroundTransparency = 1
+Logo.AnchorPoint = Vector2.new(0.5, 0.5)
+Logo.Position = UDim2.new(0.5, 0, 0.5, 0)
+
+Logo.Size = UDim2.new(0.72, 0, 0.72, 0) -- tuned to match your image fill
+Logo.Image = LOGO_ASSET_ID
+Logo.ScaleType = Enum.ScaleType.Fit
+Logo.ImageColor3 = Color3.fromRGB(235, 235, 235)
+Logo.ZIndex = 2
+
+-- CLICK / DRAG BUTTON
+local BubbleBtn = Instance.new("TextButton", Bubble)
+BubbleBtn.Size = UDim2.new(1, 0, 1, 0)
+BubbleBtn.BackgroundTransparency = 1
+BubbleBtn.Text = ""
+BubbleBtn.ZIndex = 10
+
+MakeDraggable(BubbleBtn, Bubble)
+
+---------------------------------------------------
+-- TOGGLE LOGIC (UNCHANGED BUT CLEANED)
+---------------------------------------------------
+
+local minimized = false
+
+local function ToggleUI()
+    minimized = not minimized
+
+    if minimized then
+        TweenPlay(BubbleStroke, {Color = Vesper.Theme.Negative}, 0.18)
+
+        TweenPlay(WinScale, {Scale = 0}, 0.28, Enum.EasingStyle.Back, Enum.EasingDirection.In)
+        task.delay(0.28, function()
+            Main.Visible = false
+        end)
+    else
+        TweenPlay(BubbleStroke, {Color = Color3.fromRGB(45,45,45)}, 0.18)
+
+        Main.Visible = true
+        TweenPlay(WinScale, {Scale = 1}, 0.45, Enum.EasingStyle.Elastic)
     end
+end
 
-    -- Clickable / draggable overlay
-    local BubbleBtn = Instance.new("TextButton", Bubble)
-    BubbleBtn.BackgroundTransparency = 1
-    BubbleBtn.Size   = UDim2.new(1, 0, 1, 0)
-    BubbleBtn.Text   = ""
-    BubbleBtn.ZIndex = 10
-    MakeDraggable(BubbleBtn, Bubble)
+---------------------------------------------------
+-- INITIAL STATE
+---------------------------------------------------
 
-    -- Toggle / Minimize logic
-    local minimized = false
-    local function ToggleUI()
-        minimized = not minimized
-        if minimized then
-            -- Pulse the bubble stroke to Negative to hint "hidden"
-            TweenPlay(BubbleStroke, {Color = Vesper.Theme.Negative}, 0.18)
-            TweenPlay(WinScale, {Scale = 0}, 0.28, Enum.EasingStyle.Back, Enum.EasingDirection.In)
-            task.delay(0.28, function() Main.Visible = false end)
-        else
-            TweenPlay(BubbleStroke, {Color = Vesper.Theme.Accent}, 0.18)
-            Main.Visible = true
-            TweenPlay(WinScale, {Scale = 1}, 0.45, Enum.EasingStyle.Elastic)
-        end
-    end
+Main.Visible = true
+TweenPlay(WinScale, {Scale = 1}, 0.5, Enum.EasingStyle.Elastic)
 
-    Main.Visible = true
-    TweenPlay(WinScale, {Scale = 1}, 0.5, Enum.EasingStyle.Elastic)
+---------------------------------------------------
+-- CLEAN HOVER (SUBTLE)
+---------------------------------------------------
 
-    -- Apply GlassMode on first load since Default = true
-    Main.BackgroundTransparency    = 0.32
-    Sidebar.BackgroundTransparency = 0.35
-    MainStroke.Transparency        = 0.65
-    MainStroke.Thickness           = 1.8
+BubbleBtn.MouseEnter:Connect(function()
+    TweenPlay(Bubble, {
+        BackgroundColor3 = Color3.fromRGB(28, 28, 28)
+    }, 0.12)
 
-    -- Hover pulse on the bubble
-    BubbleBtn.MouseEnter:Connect(function()
-        TweenPlay(Bubble, {BackgroundColor3 = Vesper.Theme.SidebarHover}, 0.15)
+    TweenPlay(BubbleGlow, {
+        ImageTransparency = 0.6
+    }, 0.12)
+end)
+
+BubbleBtn.MouseLeave:Connect(function()
+    TweenPlay(Bubble, {
+        BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+    }, 0.12)
+
+    TweenPlay(BubbleGlow, {
+        ImageTransparency = 0.7
+    }, 0.12)
+end)
+
+BubbleBtn.MouseButton1Click:Connect(ToggleUI)
+
+---------------------------------------------------
+-- HEADER BUTTONS
+---------------------------------------------------
+
+MinimizeBtn.MouseButton1Click:Connect(ToggleUI)
+
+CloseBtn.MouseButton1Click:Connect(function()
+    TweenPlay(WinScale, {Scale = 0}, 0.22, Enum.EasingStyle.Back, Enum.EasingDirection.In)
+    task.delay(0.22, function()
+        Main.Visible = false
     end)
-    BubbleBtn.MouseLeave:Connect(function()
-        TweenPlay(Bubble, {BackgroundColor3 = Vesper.Theme.Background}, 0.18)
-    end)
-    BubbleBtn.MouseButton1Click:Connect(ToggleUI)
+end)
 
-    -- Header button connections (kept for completeness)
-    MinimizeBtn.MouseButton1Click:Connect(ToggleUI)
-    CloseBtn.MouseButton1Click:Connect(function()
-        TweenPlay(WinScale, {Scale = 0}, 0.22, Enum.EasingStyle.Back, Enum.EasingDirection.In)
-        task.delay(0.22, function() Main.Visible = false end)
-    end)
+---------------------------------------------------
+-- HOTKEY
+---------------------------------------------------
 
-    UIS.InputBegan:Connect(function(i, p)
-        if not p and i.KeyCode == hotkey then ToggleUI() end
-    end)
-
-    function Window:Toggle(state)
-        if state ~= nil then if state == (not minimized) then return end end
+UIS.InputBegan:Connect(function(i, p)
+    if not p and i.KeyCode == hotkey then
         ToggleUI()
     end
+end)
+
+function Window:Toggle(state)
+    if state ~= nil then
+        if state == (not minimized) then return end
+    end
+    ToggleUI()
+end
 
     -- ════════════════════════════════════════════════════════════
     --  NOTIFICATIONS
