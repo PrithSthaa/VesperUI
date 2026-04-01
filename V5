@@ -8,7 +8,7 @@
 --     mac-style minimize dot. Uses the same link as above.
 --   • Sidebar logo text size increased (18 → 22).
 -- ================================================================
-local LOGO_ASSET_ID = "rbxassetid://71064306381045"
+local LOGO_ASSET_ID = "rbxassetid://137569557880178"
 local LOGO_FILL     = 0.62
 
 -- ▼ Set your Discord invite link here
